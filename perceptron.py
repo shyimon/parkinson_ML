@@ -1,0 +1,2 @@
+class perceptron:
+    # da scrivere
