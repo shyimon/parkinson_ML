@@ -39,40 +39,51 @@ print(number_test)
 # print(sum)
 
 train_set = x[:216]
-validation_set = x[217:324]
-test_set = x[325:432]
-print("Training set")
-print(train_set)
-print("Validation set")
-print(validation_set)
-print("Test set")
-print(test_set)
+validation_set = x[216:324]
+test_set = x[324:432]
+y_train = y[:216]
+y_val   = y[216:324]
+y_test  = y[324:432]
 
-#weights definition (matrix) and initialitation
-w = np.random.uniform(low=-0.01, high=0.1, size=6)
-print("Pesi inizializzati")
-print(w)
-
-#bias and learning rate definition
+# Parameters definition and initialitation
+w = np.random.uniform(low=-0.1, high=0.1, size=6)
 b = 0
-eta = 0.1
 
-# learning algorithm (perceptron learning rule)
+# Learning rate
+eta = 6
 
+#Perceptron learning algorithm (Rosenblatt)
+epochs = 10
+for epoch in range(epochs): 
+    for i in range(len(train_set)): 
+        x_i = train_set[i] #i-esima riga di train_set
+        target_i = y_train[i] 
+        
+        net_i = np.dot(x_i, w) + b 
+        output_i = 1 if net_i >= 0 else 0  
+        
+        error_i = target_i - output_i  
+        w = w + eta * error_i * x_i 
+        b = b + eta * error_i
 
-# The non linear neuron 
+def output(net):
+    return np.where(net >=0, 1, 0)
+
 net = train_set @ w + b
-print("Vettore net")
-print(net)
-# print(type(net))
-# print(net.shape)
+final_output = output(net)
+print("L'output del percettrone è")
+print(final_output)
 
-def out(net):
-    return np.where(net >= 0, 1, 0)
-output = out(net)
-print("Vettore output del neurone")
-print(output)
-      
+# Comparison between final output vector and target vector
+comparison = (final_output == y_train)
+error_idx = np.where(final_output != y_train)[0]
+print("Uncorrect indexes:", error_idx)
+num_correct = np.sum(final_output == y_train)
+print("Number of correct indexes", num_correct,)
+num_wrong = np.sum(final_output != y_train)
+print("Number of uncorrect indexes", num_wrong,)
+accuracy = np.mean(final_output == y_train) * 100
+print("Accuracy =", accuracy, "%")
 
 # Check if the perceptron learned the logic rule of MONK_1
 """"
@@ -87,4 +98,4 @@ net_data = x @ w + b
 output_data = out(net)
 logic_rule_accuracy = np-mean/output_data == logic_data) * 100
 print("How much does the perceptron coincide with the logical rule:" , logic_rule_accuracy , "%")
-""""
+"""
