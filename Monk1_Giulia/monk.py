@@ -29,7 +29,7 @@ number_test = int(len(x) - number_train) * 0.5
 print(number_validation)
 print(number_test) 
 
-sum = number_train + number_validation
+sum = number_train + number_validation + number_test
 print(sum)
 
 train_set = x[:216]
@@ -41,11 +41,10 @@ print(test_set)
 
 #weights definition (matrix) and initialitation
 w_1 = np.random.uniform(0.01, 0.1, (216, 6))
-w_2 = np.random.uniform(0.01, 0.1, (216, 6))
 print(w_1)
 print(w_2)
 
 # input neuron 
-# neuron_1 = np.array()
+# 
 
 
