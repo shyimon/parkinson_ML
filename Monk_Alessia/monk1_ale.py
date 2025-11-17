@@ -69,3 +69,31 @@ print("\nPrime 3 righe target:")
 print(y.head(3))
 
 print("\nFASE 1 COMPLETATA")
+
+print("\n=== FASE 2: PREPROCESSING: TR/TS SETS ===")
+
+y_series = y.iloc[:, 0] #Converte il DataFrame y in una Series
+
+positive_indices = y_series[y_series == 1].index
+negative_indices = y_series[y_series == 0].index
+
+train_positive_indices = positive_indices[:62]
+train_negative_indices = negative_indices[:62]
+
+train_indices = train_positive_indices.union(train_negative_indices)
+
+X_train = X_renamed.loc[train_indices]
+y_train = y_series.loc[train_indices]
+
+X_test = X_renamed
+y_test = y_series
+
+print(f"Divisione completata!")
+print(f"Training set: {len(X_train)} esempi")
+print(f"Test set: {len(X_test)} esempi")
+
+print("\nDistribuzione training set:")
+print(f"Classe 0: {(y_train == 0).sum()} esempi")
+print(f"Classe 1: {(y_train == 1).sum()} esempi")
+
+print("\nFASE 2 COMPLETATA")
