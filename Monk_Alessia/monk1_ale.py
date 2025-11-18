@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.metrics import accuracy_score, classification_report
 
 # fetch dataset 
@@ -97,3 +98,84 @@ print(f"Classe 0: {(y_train == 0).sum()} esempi")
 print(f"Classe 1: {(y_train == 1).sum()} esempi")
 
 print("\nFASE 2 COMPLETATA")
+
+print("\nFASE 3: BASELINE MODELING")
+
+dt_model = DecisionTreeClassifier(
+    random_state=42, 
+    max_depth=4,
+    min_samples_split=10,
+    min_samples_leaf=5,
+    max_features=None,
+    criterion='entropy'
+)
+dt_model.fit(X_train, y_train)
+print("Modello Decision Tree addestrato con successo")
+y_train_pred = dt_model.predict(X_train)
+y_test_pred = dt_model.predict(X_test)
+
+train_accuracy = accuracy_score(y_train, y_train_pred)
+test_accuracy = accuracy_score(y_test, y_test_pred)
+
+print(f"Training Accuracy: {train_accuracy:.4f}")
+print(f"Test Accuracy: {test_accuracy:.4f}")
+
+print("\nClassification Report (Test Set):") #aiuta a capire se il modello ha un bias verso una specifica classe
+print(classification_report(y_test, y_test_pred))
+
+#misura quanto ogni feature contribuisce alle decisioni del modello
+feature_importance = pd.DataFrame({
+    'feature': X_train.columns,
+    'importance': dt_model.feature_importances_
+}).sort_values('importance', ascending=False)
+
+print("Feature Importance:")
+for _, row in feature_importance.iterrows():
+    print(f"  {row['feature']}: {row['importance']:.4f}")
+
+plt.figure(figsize=(10, 6))
+plt.barh(feature_importance['feature'], feature_importance['importance'])
+plt.title('Feature Importance - MONK Problem 1')
+plt.xlabel('Importance Score')
+plt.tight_layout()
+plt.show() #rappresentazione grafica della feature importance 
+
+cm = confusion_matrix(y_test, y_test_pred)
+print("Matrice di Confusione (Test Set):")
+print(cm)
+
+plt.figure(figsize=(20, 10))
+plot_tree(dt_model, 
+          feature_names=X_train.columns,
+          class_names=['False', 'True'],
+          filled=True,
+          rounded=True,
+          fontsize=10)
+plt.title('Decision Tree - MONK Problem 1')
+plt.show()
+
+print("\n=== 3.7 VERIFICA REGOLA MONK-1 ===")
+
+def test_monk1_rule(model, feature_names):
+    """Test specifico per verificare se il modello ha appreso la regola MONK-1"""
+    
+    print("Regola: (head_shape = body_shape) OR (jacket_color = red)")
+    
+    test1 = pd.DataFrame([[1, 1, 1, 1, 2, 1]], columns=feature_names)
+    test2 = pd.DataFrame([[1, 2, 1, 1, 1, 1]], columns=feature_names) 
+    test3 = pd.DataFrame([[1, 2, 1, 1, 2, 1]], columns=feature_names)
+    
+    pred1 = model.predict(test1)[0]
+    pred2 = model.predict(test2)[0]
+    pred3 = model.predict(test3)[0]
+    
+    print(f"  Test 1 - head_shape = body_shape: Predizione = {pred1} (atteso: 1)")
+    print(f"  Test 2 - jacket_color = red: Predizione = {pred2} (atteso: 1)")
+    print(f"  Test 3 - nessuna condizione: Predizione = {pred3} (atteso: 0)")
+    
+    correct_predictions = (pred1 == 1) and (pred2 == 1) and (pred3 == 0)
+    print(f"\nModello ha appreso correttamente la regola: {correct_predictions}")
+
+test_monk1_rule(dt_model, X_train.columns)
+
+print("=== FASE 3 COMPLETATA ===")
