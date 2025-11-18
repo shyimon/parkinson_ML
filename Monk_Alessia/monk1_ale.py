@@ -99,16 +99,21 @@ print(f"Classe 1: {(y_train == 1).sum()} esempi")
 
 print("\nFASE 2 COMPLETATA")
 
+X_train['head_shape_eq_body_shape'] = (X_train['head_shape'] == X_train['body_shape']).astype(int)
+X_test['head_shape_eq_body_shape'] = (X_test['head_shape'] == X_test['body_shape']).astype(int)
+
+print("Aggiunta nuova feature: head_shape_eq_body_shape")
+print(f"Nuove features: {list(X_train.columns)}")
+
 print("\nFASE 3: BASELINE MODELING")
 
 dt_model = DecisionTreeClassifier(
     random_state=42, 
-    max_depth=4,
-    min_samples_split=10,
+    max_depth=2,           
     min_samples_leaf=5,
-    max_features=None,
     criterion='entropy'
 )
+
 dt_model.fit(X_train, y_train)
 print("Modello Decision Tree addestrato con successo")
 y_train_pred = dt_model.predict(X_train)
@@ -154,16 +159,15 @@ plot_tree(dt_model,
 plt.title('Decision Tree - MONK Problem 1')
 plt.show()
 
-print("\n=== 3.7 VERIFICA REGOLA MONK-1 ===")
-
 def test_monk1_rule(model, feature_names):
     """Test specifico per verificare se il modello ha appreso la regola MONK-1"""
     
     print("Regola: (head_shape = body_shape) OR (jacket_color = red)")
     
-    test1 = pd.DataFrame([[1, 1, 1, 1, 2, 1]], columns=feature_names)
-    test2 = pd.DataFrame([[1, 2, 1, 1, 1, 1]], columns=feature_names) 
-    test3 = pd.DataFrame([[1, 2, 1, 1, 2, 1]], columns=feature_names)
+    # Test cases con 7 feature (includendo head_shape_eq_body_shape)
+    test1 = pd.DataFrame([[1, 1, 1, 1, 2, 1, 1]], columns=feature_names)  # head_shape = body_shape = 1 → head_shape_eq_body_shape = 1
+    test2 = pd.DataFrame([[1, 2, 1, 1, 1, 1, 0]], columns=feature_names)  # jacket_color = 1 (red) → head_shape_eq_body_shape = 0  
+    test3 = pd.DataFrame([[1, 2, 1, 1, 2, 1, 0]], columns=feature_names)  # nessuna condizione → head_shape_eq_body_shape = 0
     
     pred1 = model.predict(test1)[0]
     pred2 = model.predict(test2)[0]
