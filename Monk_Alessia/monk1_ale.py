@@ -10,8 +10,7 @@ from sklearn.metrics import accuracy_score, classification_report
 
 # fetch dataset 
 monk_s_problems = fetch_ucirepo(id=70) 
-  
-# data (as pandas dataframes) 
+  # data (as pandas dataframes) 
 X = monk_s_problems.data.features
 y = monk_s_problems.data.targets 
 
@@ -50,31 +49,21 @@ feature_mapping = {
     'a5': 'jacket_color',  # 1=red, 2=yellow, 3=green, 4=blue
     'a6': 'has_tie'
 }
-
 print("Mapping feature UCI -> MONK:")
 for code, name in feature_mapping.items():
     print(f"  {code} = {name}")
-
 print(f"\nSignificato valori jacket_color: 1=red, 2=yellow, 3=green, 4=blue")
 print(f"Regola MONK-1: (head_shape = body_shape) OR (jacket_color = red)")
 print(f"Traduzione tecnica: (a1 = a2) OR (a5 = 1)")
-
 # Rinomina le colonne per chiarezza
 X_renamed = X.rename(columns=feature_mapping)
 print(f"\nFeatures rinominate: {list(X_renamed.columns)}")
-
-print("\n=== ANTEPRIMA DATI CON NOMI SIGNIFICATIVI ===")
-print("Prime 3 righe features:")
-print(X_renamed.head(3))
-print("\nPrime 3 righe target:")
-print(y.head(3))
 
 print("\nFASE 1 COMPLETATA")
 
 print("\n=== FASE 2: PREPROCESSING: TR/TS SETS ===")
 
 y_series = y.iloc[:, 0] #Converte il DataFrame y in una Series
-
 positive_indices = y_series[y_series == 1].index
 negative_indices = y_series[y_series == 0].index
 
@@ -92,7 +81,6 @@ y_test = y_series
 print(f"Divisione completata!")
 print(f"Training set: {len(X_train)} esempi")
 print(f"Test set: {len(X_test)} esempi")
-
 print("\nDistribuzione training set:")
 print(f"Classe 0: {(y_train == 0).sum()} esempi")
 print(f"Classe 1: {(y_train == 1).sum()} esempi")
@@ -113,18 +101,16 @@ dt_model = DecisionTreeClassifier(
     min_samples_leaf=5,
     criterion='entropy'
 )
-
 dt_model.fit(X_train, y_train)
 print("Modello Decision Tree addestrato con successo")
+
 y_train_pred = dt_model.predict(X_train)
 y_test_pred = dt_model.predict(X_test)
-
 train_accuracy = accuracy_score(y_train, y_train_pred)
 test_accuracy = accuracy_score(y_test, y_test_pred)
 
 print(f"Training Accuracy: {train_accuracy:.4f}")
 print(f"Test Accuracy: {test_accuracy:.4f}")
-
 print("\nClassification Report (Test Set):") #aiuta a capire se il modello ha un bias verso una specifica classe
 print(classification_report(y_test, y_test_pred))
 
@@ -133,7 +119,6 @@ feature_importance = pd.DataFrame({
     'feature': X_train.columns,
     'importance': dt_model.feature_importances_
 }).sort_values('importance', ascending=False)
-
 print("Feature Importance:")
 for _, row in feature_importance.iterrows():
     print(f"  {row['feature']}: {row['importance']:.4f}")
