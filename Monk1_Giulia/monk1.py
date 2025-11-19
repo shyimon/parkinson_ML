@@ -28,150 +28,157 @@ def return_monk1():
 
 train_set, test_set = return_monk1()
 
-print("Dimensione del train set:", len(train_set))
-print("Dimensione del test set set:", len(test_set))
 print("Il tipo di variabili dei train e del test sets sono:", type(train_set), type(test_set))
 print("Il tipo di variabile y è:", type(y))
 train_set = train_set.drop(columns=["id"])
 test_set = test_set.drop(columns=["id"])
-train_set = train_set.astype(float).to_numpy()
-y = np.asarray(y, dtype=float).ravel()
+train_set = train_set.to_numpy()
+y: pd.Series
+y = y.to_numpy().ravel()
+y_train = y[:len(train_set)]
 
 print(train_set)
 
-class Neuron():
-    def __init__(self, position_in_layer, is_output_neuron=False):
-        self.weights=[]
-        self.inputs=[]
-        self.output=None
-        self.update_weights=[]
+class Neuron:
+    def __init__(self, num_inputs, index_in_layer, is_output_neuron=False):
+        self.index_in_layer = index_in_layer
         self.is_output_neuron = is_output_neuron
-        self.delta=None
-        self.position_in_layer=position_in_layer
-    
+
+        self.weights = np.random.uniform(0.01, 0.1, size=num_inputs)
+        self.net = 0.0          # net input (scalare)
+        self.output = 0.0       # output del neurone
+        self.delta = 0.0
+        self.epochs = 0.0
+        self.inputs = None
+
+        self.in_output_neurons = [] 
+
     def attach_to_output(self, neurons):
-        self.in_output_neurons=[]
+        self.in_output_neurons = list(neurons)
 
-        for neuron in neurons:
-            self.in_output_neurons.append(neuron)
-    
     def sigmoid(self, x):
-        return 1 / (1+math.exp(-x))
-    
-    def init_weights(self, num_input):
-        for i in range(num_input):
-         self.weights.append(np.random.uniform(0.01, 0.1))
-    
-    def predict(self, row):
-        self.inputs=[]
-        net = 0
-        for weight, feature in zip(self.weights, row):
-            self.inputs.append(feature)
-            net += weight * feature
-            self.output = self.sigmoid(net)
-            return self.output
-        
-    def update_neuron(self):
-        self.weights=[]
-        for new_weight in self.update_weights:
-            self.weights.append(new_weight)
-    
-    def calculate_update(self, eta, target):
-        if self.is_output_neuron:
-            self.delta=(self.output_target) * self.output * (1-self.output)
-        else:
-            delta_sum = 0
-            cur_weight_index = self.position_in_layer
-            for output_neuron in self.output_neuron:
-                delta_sum += output_neuron.delta * output_neuron.weights[cur_weight_index]
-                self.delta = delta_sum * self.output * self.output * (1-self.output)
-                self.update_weights=[]
+        return 1 / (1 + math.exp(-x))
 
-                for cur_weight, cur_input in zip(self.weights, self.inputs):
-                    gradient = self.delta * cur_input
-                    new_weight = cur_weight - eta * gradient
-                    self.update_weights.append(new_weight)
+    def derivative_sigmoid(self, x):
+        s = self.sigmoid(x)
+        return s * (1 - s)
+
+    def predict(self, inputs):
+        inputs = np.array(inputs, dtype=float)
+        self.inputs = inputs             
+        self.net = float(np.dot(self.weights, inputs))
+        self.output = self.sigmoid(self.net)
+        return self.output        
+
+    def compute_delta_output(self, target):
+        self.delta = (target - self.output) * self.derivative_sigmoid(self.net)
+    
+    def compute_delta_hidden(self):
+        delta_sum = 0.0
+        for k in self.in_output_neurons:
+         w_kj = k.weights[self.index_in_layer]
+         delta_sum += k.delta * w_kj
+
+        self.delta = delta_sum * self.derivative_sigmoid(self.net)
+
+    def update_weights(self, eta):
+        if self.inputs is None:
+            raise ValueError("self.inputs è None: devi chiamare predict() prima di update_weights().")
+        self.weights = self.weights + eta * self.delta * self.inputs
+
+        self.weights = self.weights + eta * self.delta * self.inputs
 
 class MultiLayerPerceptron:
-    def __init__(self, num_neuron, eta, epochs):
-        # one output neuron
-        self.output_neuron = Neuron(0, is_output_neuron=True)
-
-        self.perceptrons = []
-        for i in range(num_neuron):
-            # create neuron
-            neuron = Neuron(i)
-            # attach the output layer to this neuron
-            neuron.attach_to_output([self.output_neuron])
-            # append to layer
-            self.perceptrons.append(neuron)
-
-        # training parameters
+    def __init__(self, num_inputs, num_hidden, num_outputs=1, eta=0.1):
+        self.num_inputs = num_inputs
+        self.num_hidden = num_hidden
+        self.num_outputs = num_outputs
         self.eta = eta
-        self.epochs = epochs
-        self.num_neuron = num_neuron
+
+        # hidden layer
+        self.hidden_layer = [Neuron(num_inputs=num_inputs, index_in_layer=j, is_output_neuron=False) for j in range(num_hidden)]
+
+        # output layer
+        self.output_layer = [Neuron(num_inputs=num_hidden, index_in_layer=k, is_output_neuron=True) for k in range(num_outputs)]
+
+        # Connect each hidden neuron to the output neuron
+        for h in self.hidden_layer:
+            h.attach_to_output(self.output_layer)
+
     #forward pass
-    def predict(self, row):
-        # row arriva come numpy.ndarray -> lo converto in lista
-        row_list = list(row)          # NON modifichiamo 'row' originale
-        row_list.append(1.0)          # bias per lo strato nascosto
-
-        # attivazioni dei neuroni nascosti
-        hidden_activations = [p.predict(row_list) for p in self.perceptrons]
-        hidden_activations.append(1.0)     # bias per il neurone di output
-
-        # output della rete
-        net = self.output_neuron.predict(hidden_activations)
-
-        # soglia a 0.5
-        if net >= 0.5:
-            return 1.0
-        return 0.0
+    def forward(self, x):
+        hidden_outputs = [h.predict(x) for h in self.hidden_layer]
+        outputs = [o.predict(hidden_outputs) for o in self.output_layer]
+        return np.array(hidden_outputs, dtype=float), np.array(outputs, dtype=float)
     
-    def fit(self, train_set, y):
-        # stochastic gradient descent
-        num_row = len(train_set)
-        num_feature = len(train_set[0])
+    #backpropagation
+    def backward(self, x, y_true):
+        if self.num_outputs == 1:
+            y_true = [y_true]
 
-    # Initialization of the weights
-        for neuron in self.perceptrons:
-            neuron.init_weights(num_feature)
-        self.output_neuron.init_weights(len(self.perceptrons))
+    # delta output neuron
+        for k, o in enumerate(self.output_layer):
+         o.compute_delta_output(y_true[k])
 
-    # training algorithm
-        for i in range(self.epochs):
-          r_i = np.random.randint(0, num_row)   # <-- riga corretta
-        row = train_set[r_i]
-        y_atteso = self.predict(row)
-        target = y[r_i]
+    # delta hidden neuron
+        for h in self.hidden_layer:
+            h.compute_delta_hidden()
 
-            # Calculate update for the output layer
-        self.output_neuron.calculate_update(self.eta, target)
+    # 3) update output weights
+        hidden_outputs = [h.output for h in self.hidden_layer]
+        for o in self.output_layer:
+            o.inputs = np.array(hidden_outputs, dtype=float)   # <--- IMPORTANTE
+            o.update_weights(self.eta)
 
-            # Calculate update for the hidden layer
-        for neuron in self.perceptrons:
-                neuron.calculate_update(self.eta, target)
-            
-            # Update the output layer
-        self.output_neuron.update_neuron()
+    # update hidden weights
+        for h in self.hidden_layer:
+            h.update_weights(self.eta)
 
-            # Update the hidden layer
-        for neuron in self.perceptrons:
-                neuron.update_neuron()
+   
+    #training
+    def fit(self, X, y, epochs=390):
+        X = np.array(X, dtype=float)
+        y = np.array(y, dtype=float)
 
-                # At every 100 epochs calculate the error of the
-                # whole training set
-                if i % 100 == 0:
-                    total_error = 0
-                for r_i in range(num_row):
-                    row = train_set[r_i]
-                    y_atteso = self.predict(row)
-                    error = (y[r_i]-y_atteso)
-                    total_error += (error**2)*0.5
-num_neuron = 3
-eta = 0.01
-epochs = 400
-classifier =MultiLayerPerceptron(num_neuron, eta, epochs)
-classifier.fit(train_set, y)
+        for epoch in range(epochs):
+            total_loss = 0.0
+
+        for xi, yi in zip(X, y):
+            # forward
+            _, outputs = self.forward(xi)          
+            y_pred = outputs[0] if self.num_outputs == 1 else outputs
+
+            # loss
+            total_loss += 0.5 * np.mean((y_pred - yi) ** 2)
+
+            # backward + update
+            self.backward(xi, yi)
+
+        print(f"Epochs: {epochs} and loss: {total_loss/len(X):.4f}")
+
+
+    def predict(self, X):
+        X = np.array(X, dtype=float)
+        preds = []
+        for xi in X:
+         _, outputs = self.forward(xi)
+        y_pred = outputs[0] if self.num_outputs == 1 else outputs
+        preds.append(y_pred)
+        return np.array(preds)
+    
+num_inputs = train_set.shape[1]
+num_hidden = 3      
+num_outputs = 1
+eta = 0.1
+
+mlp = MultiLayerPerceptron(num_inputs, num_hidden, num_outputs, eta)
+
+mlp.fit(train_set, y_train, epochs=390)
+
+y_pred = mlp.predict(train_set)
+y_pred_class = 1 if y_pred >= 5 else 0
+
+accuracy = np.mean(y_pred_class == y_train)
+print("Accuracy:", accuracy * 100 "%")
 
 
