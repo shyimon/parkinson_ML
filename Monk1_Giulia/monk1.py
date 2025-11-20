@@ -84,9 +84,8 @@ class Neuron:
     def update_weights(self, eta):
         if self.inputs is None:
             raise ValueError("self.inputs è None: devi chiamare predict() prima di update_weights().")
-        self.weights = self.weights + eta * self.delta * self.inputs
-
-        self.weights = self.weights + eta * self.delta * self.inputs
+        self.weights = self.weights + eta * self.delta 
+    
 
 class MultiLayerPerceptron:
     def __init__(self, num_inputs, num_hidden, num_outputs=1, eta=0.2):
@@ -127,7 +126,7 @@ class MultiLayerPerceptron:
     # 3) update output weights
         hidden_outputs = [h.output for h in self.hidden_layer]
         for o in self.output_layer:
-            o.inputs = np.array(hidden_outputs, dtype=float)   # <--- IMPORTANTE
+            o.inputs = np.array(hidden_outputs, dtype=float)   
             o.update_weights(self.eta)
 
     # update hidden weights
@@ -143,10 +142,10 @@ class MultiLayerPerceptron:
         for epoch in range(epochs):
             total_loss = 0.0
 
-        for xi, yi in zip(X, y):
+            for xi, yi in zip(X, y):
             # forward
-            _, outputs = self.forward(xi)          
-            y_pred = outputs[0] if self.num_outputs == 1 else outputs
+                _, outputs = self.forward(xi)          
+                y_pred = outputs[0] if self.num_outputs == 1 else outputs
 
             # loss
             total_loss += 0.5 * np.mean((y_pred - yi) ** 2)
@@ -161,10 +160,10 @@ class MultiLayerPerceptron:
         X = np.array(X, dtype=float)
         preds = []
         for xi in X:
-         _, outputs = self.forward(xi)
-        y_pred = outputs[0] if self.num_outputs == 1 else outputs
-        preds.append(y_pred)
-        return np.array(preds)
+            _,outputs = self.forward(xi)
+            y_pred = outputs[0] if self.num_outputs == 1 else outputs
+            preds.append(y_pred)
+            return np.array(preds)
     
 num_inputs = train_set.shape[1]
 num_hidden = 5      
