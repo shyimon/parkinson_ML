@@ -157,13 +157,12 @@ class MultiLayerPerceptron:
 
 
     def predict(self, X):
-        X = np.array(X, dtype=float)
         preds = []
         for xi in X:
             _,outputs = self.forward(xi)
             y_pred = outputs[0] if self.num_outputs == 1 else outputs
             preds.append(y_pred)
-            return np.array(preds)
+        return np.array(preds)
     
 num_inputs = train_set.shape[1]
 num_hidden = 5      
@@ -175,9 +174,19 @@ mlp = MultiLayerPerceptron(num_inputs, num_hidden, num_outputs, eta)
 mlp.fit(train_set, y_train, epochs=390)
 
 y_pred = mlp.predict(train_set)
-y_pred_class = 1 if y_pred >= 0.5 else 0
+y_pred_class = 1 
+for i in range(len(y_pred)):
+    if y_pred[i] >= 0.5:
+        y_pred[i] == 1
+    else: 0
 
-accuracy = np.mean(y_pred_class == y_train) * 100
+for i in range(len(y_pred)):
+        y_pred[i] = int(y_pred[i])
+
+print(y_pred)
+accuracy = (np.sum(y_pred) == y_train) / len(y_train) * 100
 print("Accuracy in %:", accuracy)
+
+
 
 

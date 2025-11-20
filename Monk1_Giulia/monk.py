@@ -7,7 +7,7 @@ import math
 monk_s_problems = fetch_ucirepo(id=70) 
   
 # data (as pandas dataframes) 
-x = monk_s_problems.data.features 
+x = monk_s_problems.data.features
 y = monk_s_problems.data.targets 
 
 # metadata 
