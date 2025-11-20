@@ -29,7 +29,7 @@ class Neuron:
         self.index_in_layer = index_in_layer
         self.is_output_neuron = is_output_neuron
         self.weights = np.random.uniform(-0.5, 0.5, size=num_inputs)
-        self.bias = np.random.uniform(-0.5, 0.5)
+        self.bias = np.random.uniform(-0.5, 0.5) # la scelta del valore del bias è da giustificare con una grid search
         self.net = 0.0
         self.output = 0.0
         self.delta = 0.0
