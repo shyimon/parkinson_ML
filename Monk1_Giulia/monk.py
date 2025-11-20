@@ -1,5 +1,7 @@
 from ucimlrepo import fetch_ucirepo 
 import numpy as np
+import pandas as pd
+import math
   
 # fetch dataset 
 monk_s_problems = fetch_ucirepo(id=70) 
@@ -14,94 +16,91 @@ print(monk_s_problems.metadata)
 # variable information 
 print(monk_s_problems.variables) 
 
-print("Dimensione del dataset:", len(x))
+def return_monk1():
+    train_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
+    test_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test'
+    column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
 
-x = x.to_numpy()
-y = y.to_numpy().astype(float).ravel()
+    train_set = pd.read_csv(train_set_url, header=None, names=column_names, delim_whitespace=True)
+    test_set = pd.read_csv(test_set_url, header=None, names=column_names, delim_whitespace=True)
 
-# Data split
-number_train = int(len(x) * 0.5)
-print("How many training data:", number_train)
-number_validation = int((len(x) - number_train) * 0.5)
-number_test = int((len(x) - number_train) * 0.5)
-print("How many validation data:", number_validation)
-print("How many test data:", number_test)
+    return train_set, test_set
 
-train_set = x[:number_train]
-validation_set = x[number_train:number_train + number_validation]
-test_set = x[number_train + number_validation:]
-y_train = y[:number_train]
-y_val   = y[number_train:number_train + number_validation]
-y_test  = y[number_train + number_validation:]
+train_set, test_set = return_monk1()
 
-# trasformo i target in colonne (N,1) per i calcoli vettoriali
-y_train_col = y_train.reshape(-1, 1)
-y_val_col   = y_val.reshape(-1, 1)
-y_test_col  = y_test.reshape(-1, 1)
+print("Dimensione del train set:", len(train_set))
+print("Dimensione del test set set:", len(test_set))
+print("Il tipo di variabili dei train e del test sets sono:", type(train_set), type(test_set))
+print("Il tipo di variabile y è:", type(y))
+train_set = train_set.drop(columns=["id"])
+train_set = train_set.astype(float).to_numpy()
+test_set  = test_set.astype(float).to_numpy()
+y = y.astype(int).to_numpy().ravel()
+print("I tipi di variabili train set e test set adesso sono:", type(train_set), type (test_set))
+print("Il tipo di variabile y adesso è:", type(y))
+print(train_set)
+train_set = np.delete(train_set, 7, axis=1)
+print(train_set)
 
-# Neural network: input -> 2 hidden layer -> output
-input_dim = train_set.shape[1] #6 features
-hidden_dim = 2
-output_dim = 1
+y_train = y[:len(train_set)]
+y_test = y[:len(test_set)]
 
-rng = np.random.default_rng(0)
 # Parameters definition and initialitation (hidden layer)
-w_hidd = rng.uniform(0.01, 0.1, size=(input_dim, hidden_dim))  # (6, hidden_dim)
-b_hidd = np.zeros((1, hidden_dim))
-# Parameters definition and initialitation (output unit)
-w_out = rng.uniform(0.01, 0.1, size=(hidden_dim, output_dim))  # (hidden_dim, 1)
-b_out = np.zeros((1, 1))
+train_coloumns = np.shape(train_set)[1]
+num_hidd_neur = 1
+num_out_neur = 1
+w_hidd = np.random.uniform(0.01, 0.001, size=(train_coloumns, num_hidd_neur))
+b_hidd = np.random.uniform(0.01, 0.001, size=(num_hidd_neur))
+w_out = np.random.uniform(0.01, 0.001, size=(num_out_neur, 1))  
+b_out = np.random.uniform(0.01, 0.001)
 
-# Hyperparameters
-eta = 0.1
-epochs = 1000
-
-# activation functions
+# activation function
 def sigmoid(z):
     return 1.0 / (1.0 + np.exp(-z))
+
 def derivative_sigmoid(a):
-    return a * (1 - a)
+    return - 1.0 / ((1.0 + np.exp(-a)) ** 2)
+
+# Hyperparameters
+eta = 0.5
+epochs = 390
 
 #Backpropagation learning algorithm
+# Neural network: input -> 1 hidden neuron -> 1 output neuron
 for epoch in range(epochs):
     # FORWARD PASS
     # hidden layer 
-    net_1 = train_set @ w_hidd + b_hidd    
-    out_1 = sigmoid(net_1)                  
+    net_hidd = train_set @ w_hidd + b_hidd  
+    out_hidd = sigmoid(net_hidd)                  
 
     # output layer
-    net_2 = out_1 @ w_out + b_out           
-    out_2 = sigmoid(net_2)                  
+    net_out = out_hidd @ w_out + b_out           
+    final_out = sigmoid(net_out)                  
 
     # Mean square error
-    diff = out_2 - y_train_col              
-    loss = np.mean(diff ** 2)
+    loss_pattern =  0.5 * ((y_train - final_out)**2)
 
     # BACKWARD PASS
-    N = len(train_set)
-
-    # dL/d(out_2) = 2*(out_2 - y)/N
-    dL_d_out2 = 2 * diff / N                # (N,1)
-
-    # d(out_2)/d(net_2) = sigmoid'(net_2) = out_2*(1-out_2)
-    dL_d_net2 = dL_d_out2 * derivative_sigmoid(out_2) 
-
+    # delta output neuron
+    dE_dnet_out = final_out - y_train 
+    derivative_out = derivative_sigmoid(final_out)   
+    delta_out = dE_dnet_out * derivative_out         
     # Gradients for w_out and b_out
-    dL_dw_out = out_1.T @ dL_d_net2        
-    dL_db_out = np.sum(dL_d_net2, axis=0, keepdims=True) 
-
-    # Backpropagation to the hidden layer
-    dL_d_out1 = dL_d_net2 @ w_out.T        
-    dL_d_net1 = dL_d_out1 * derivative_sigmoid(out_1)  
-
-    dL_dw_hidd = train_set.T @ dL_d_net1  
-    dL_db_hidd = np.sum(dL_d_net1, axis=0, keepdims=True) 
-
-    # UPDATE OF THE PARAMETERS 
-    w_out  -= eta * dL_dw_out
-    b_out  -= eta * dL_db_out
-    w_hidd -= eta * dL_dw_hidd
-    b_hidd -= eta * dL_db_hidd
+    grad_w_out = np.sum(delta_out * out_hidd)    
+    grad_b_out = np.sum(delta_out)
+    w_out -= eta * grad_w_out
+    b_out -= eta * grad_b_out
+    
+    # delta output neuron
+    dE_dout_hidd = delta_out * w_out
+    derivative_hidd = derivative_sigmoid(out_hidd)   
+    delta_hidd = dE_dout_hidd * derivative_hidd         
+    # Gradients for w_hidd and b_hidd
+    grad_w_hidd = (np.transpose(train_set)) @ delta_hidd   
+    grad_b_hidd= np.sum(delta_hidd)
+    w_hidd -= eta * grad_w_hidd
+    b_hidd -= eta * grad_b_hidd
+    
 
 # Training set accuracy
 net_1 = train_set @ w_hidd + b_hidd
@@ -109,9 +108,9 @@ out_1 = sigmoid(net_1)
 
 net_2 = out_1 @ w_out + b_out
 final_output = sigmoid(net_2)
-final_output = (final_output >= 0.5).astype(int)
+final_output = (final_output >= 5).astype(int)
 
-comparison = (final_output == y_train_col)
+comparison = (final_output == y_train)
 num_correct = np.sum(comparison)
 num_wrong = len(train_set) - num_correct
 accuracy = num_correct / len(train_set) * 100
@@ -131,15 +130,12 @@ def predict(x_set):
 
 # Accuracy of train/validation/test
 pred_train = predict(train_set)
-acc_train = np.mean(pred_train == y_train_col) * 100
+acc_train = np.mean(pred_train == y_train) * 100
 
-pred_val = predict(validation_set)
-acc_val = np.mean(pred_val == y_val_col) * 100
 
 pred_test = predict(test_set)
-acc_test = np.mean(pred_test == y_test_col) * 100
+acc_test = np.mean(pred_test == y_test) * 100
 
 print("\nFINAL ACCURACY")
 print(f"Train accuracy:      {acc_train:.2f} %")
-print(f"Validation accuracy: {acc_val:.2f} %")
 print(f"Test accuracy:       {acc_test:.2f} %")
