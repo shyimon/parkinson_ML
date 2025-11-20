@@ -44,7 +44,7 @@ class Neuron:
         self.index_in_layer = index_in_layer
         self.is_output_neuron = is_output_neuron
 
-        self.weights = np.random.uniform(0.01, 0.1, size=num_inputs)
+        self.weights = np.random.uniform(0.001, 0.01, size=num_inputs)
         self.net = 0.0          # net input (scalare)
         self.output = 0.0       # output del neurone
         self.delta = 0.0
@@ -89,7 +89,7 @@ class Neuron:
         self.weights = self.weights + eta * self.delta * self.inputs
 
 class MultiLayerPerceptron:
-    def __init__(self, num_inputs, num_hidden, num_outputs=1, eta=0.1):
+    def __init__(self, num_inputs, num_hidden, num_outputs=1, eta=0.2):
         self.num_inputs = num_inputs
         self.num_hidden = num_hidden
         self.num_outputs = num_outputs
@@ -167,7 +167,7 @@ class MultiLayerPerceptron:
         return np.array(preds)
     
 num_inputs = train_set.shape[1]
-num_hidden = 3      
+num_hidden = 5      
 num_outputs = 1
 eta = 0.1
 
@@ -176,9 +176,9 @@ mlp = MultiLayerPerceptron(num_inputs, num_hidden, num_outputs, eta)
 mlp.fit(train_set, y_train, epochs=390)
 
 y_pred = mlp.predict(train_set)
-y_pred_class = 1 if y_pred >= 5 else 0
+y_pred_class = 1 if y_pred >= 0.5 else 0
 
-accuracy = np.mean(y_pred_class == y_train)
-print("Accuracy:", accuracy * 100 "%")
+accuracy = np.mean(y_pred_class == y_train) * 100
+print("Accuracy in %:", accuracy)
 
 
