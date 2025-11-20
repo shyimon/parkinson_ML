@@ -37,7 +37,6 @@ y: pd.Series
 y = y.to_numpy().ravel()
 y_train = y[:len(train_set)]
 
-print(train_set)
 
 class Neuron:
     def __init__(self, num_inputs, index_in_layer, is_output_neuron=False):
@@ -79,7 +78,7 @@ class Neuron:
          w_kj = k.weights[self.index_in_layer]
          delta_sum += k.delta * w_kj
 
-        self.delta = delta_sum * self.derivative_sigmoid(self.net)
+        self.delta = delta_sum * self.derivative_sigmoid(self.net) 
 
     def update_weights(self, eta):
         if self.inputs is None:
@@ -140,27 +139,24 @@ class MultiLayerPerceptron:
         y = np.array(y, dtype=float)
 
         for epoch in range(epochs):
-            total_loss = 0.0
+            
 
             for xi, yi in zip(X, y):
             # forward
                 _, outputs = self.forward(xi)          
-                y_pred = outputs[0] if self.num_outputs == 1 else outputs
+                y_pred = outputs
+                    
+                # backward + update
+                self.backward(xi, yi)
 
-            # loss
-            total_loss += 0.5 * np.mean((y_pred - yi) ** 2)
-
-            # backward + update
-            self.backward(xi, yi)
-
-        print(f"Epochs: {epochs} and loss: {total_loss/len(X):.4f}")
+      #  print(f"Epochs: {epochs} and loss: {total_loss/len(X):.4f}")
 
 
     def predict(self, X):
         preds = []
         for xi in X:
             _,outputs = self.forward(xi)
-            y_pred = outputs[0] if self.num_outputs == 1 else outputs
+            y_pred = outputs
             preds.append(y_pred)
         return np.array(preds)
     
@@ -183,8 +179,16 @@ for i in range(len(y_pred)):
 for i in range(len(y_pred)):
         y_pred[i] = int(y_pred[i])
 
+ # loss
+total_loss = 0.0
+for i in range(len(y_train)):
+    total_loss += 0.5 * ((y_pred[i] - y_train[i]) ** 2)
+
+print(total_loss)
+
+print(type(y_pred))
 print(y_pred)
-accuracy = (np.sum(y_pred) == y_train) / len(y_train) * 100
+accuracy = (np.sum(y_pred == y_train)) / len(y_train) * 100
 print("Accuracy in %:", accuracy)
 
 
