@@ -23,4 +23,4 @@ li = np.reshape(li, (2, 1))
 nn.add_layer(li)
 
 monk1_train, monk1_test = dt.return_monk1()
-nn.train(monk1_train[['a1', 'a2', 'a3', 'a4', 'a5', 'a6']], monk1_train['class'], 1)
+nn.train(monk1_train[['a1', 'a2', 'a3', 'a4', 'a5', 'a6']], monk1_train['class'], 150)
