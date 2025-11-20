@@ -26,12 +26,14 @@ class neural_network:
         return 1 - np.square(input)
     
     def feed_forward(self, input_layer):
-        self.activations = [input_layer]
+        self.activations = [np.array(input_layer).reshape(1, -1)]
+        print([np.array(input_layer).reshape(1, -1)])
         feeding = np.array(input_layer)
         for hidden_layer in self.network_structure:
             hidden_layer = np.array(hidden_layer)
             feeding = feeding.dot(hidden_layer)
             feeding = self.__tanh_activation(feeding)
+            feeding = np.array(feeding.reshape(1, -1))
             self.activations.append(feeding)
         return feeding
     
@@ -40,25 +42,27 @@ class neural_network:
         s = np.sum(s)/total_examples
         return(s)
     
-    def backprop(self, target, learning_rate=0.01):
+    def accuracy(self, predicts, Y):
+        tot = len(Y)
+        acc = 0
+        for i in range(Y):
+            if Y[i] == predicts[i]:
+                acc += 1
+        return acc / tot
+
+    def backprop(self, target, learning_rate=0.05):
         target = np.array(target).reshape(1, -1)
-        inputs = np.array(self.activations[-1]).reshape(1, -1)
         error = target - float(self.activations[-1])
 
         for layer in range(len(self.network_structure), 0, -1):
-            print(f"Layer {layer}")
             delta = error * self.__tanh_deriv(self.activations[layer])
             previous_layer_error = np.dot(delta, self.network_structure[layer - 1].T)
-            print(len(self.activations))
-            print(f"activ \n{self.activations[layer - 1]}")
-            print(f"delta {delta}")
             
             gradient = np.dot(self.activations[layer - 1].T, delta)
             # print(self.network_structure)
-            self.network_structure[layer] += learning_rate * gradient
+            self.network_structure[layer - 1] += learning_rate * gradient
             # print(self.network_structure)
             error = previous_layer_error
-        
     
 
     # The training loop. It takes in input:
@@ -72,12 +76,14 @@ class neural_network:
         loss = []
         for ep in range(epochs):
             epoch_losses = []
-            for input in range(1):
+            for input in range(len(x)):
                 output = self.feed_forward(x.iloc[input])
+                if ep == epochs - 1:
+                    print(f"Input is {x.iloc[input]}")
                 epoch_losses.append(self.MSE_loss(output, Y[input], len(Y)))
-                # self.network_structure = self.backprop(x.iloc[input], Y[input])
-                self.backprop(Y[input])
+                self.backprop(Y[input], 0.2)
             # print(f"Accuracy for epoch {ep+1} = {(1-(sum(epoch_losses)/len(x))*100)}")
+            # print(f"Loss for epoch {ep+1} = {sum(epoch_losses) / len(x)}\n\n")
             accuracy.append(1-(sum(epoch_losses)/len(x))*100)
             loss.append(sum(epoch_losses) / len(x))
         return(self.network_structure, accuracy, loss)
