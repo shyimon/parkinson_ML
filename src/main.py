@@ -3,7 +3,7 @@ import numpy as np
 
 # Custom functions and classes
 import data_manipulation as data
-import neural_network as nn
+import mlp as nn
 
 # === MAIN EXECUTION ===
 # Carica i dati
@@ -20,7 +20,7 @@ num_outputs = 1
 eta = 0.05           # Learning rate aumentato
 
 # Crea e allena la rete 
-mlp = nn.MultiLayerPerceptron(num_inputs, num_hidden, num_outputs, eta)
+mlp = nn.NeuralNetwork(num_inputs, num_hidden, num_outputs, eta)
 print("Inizio training...")
 mlp.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=500)
 
