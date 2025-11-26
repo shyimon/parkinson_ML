@@ -11,28 +11,34 @@ class NeuralNetwork:
         self.eta = eta
         self.loss_history = {"training": [], "test": []}
 
-        utils.draw_network([num_inputs, num_hidden, num_outputs])
-
         self.hidden_layer = [neuron.Neuron(num_inputs=num_inputs, index_in_layer=j, activation_function_type="tanh") for j in range(num_hidden)]
         self.output_layer = [neuron.Neuron(num_inputs=num_hidden, index_in_layer=k, is_output_neuron=True, activation_function_type="tanh") for k in range(num_outputs)]
 
         for h in self.hidden_layer:
             h.attach_to_output(self.output_layer)
 
+
     def forward(self, x):
-        hidden_outputs = [h.predict(x) for h in self.hidden_layer]
-        outputs = [o.predict(hidden_outputs) for o in self.output_layer]
+        hidden_outputs = [h.feed_neuron(x) for h in self.hidden_layer]
+        outputs = [o.feed_neuron(hidden_outputs) for o in self.output_layer]
         return hidden_outputs, outputs
+    
+    def predict(self, X):
+        preds = []
+        for xi in X:
+            _, outputs = self.forward(xi)
+            preds.append(outputs[0])
+        return np.array(preds)
     
     def backward(self, x, y_true):
         if self.num_outputs == 1:
             y_true = [y_true]
 
         for k, o in enumerate(self.output_layer):
-            o.compute_delta_output(y_true[k])
+            o.compute_delta(y_true[k])
 
         for h in self.hidden_layer:
-            h.compute_delta_hidden()
+            h.compute_delta(y_true[k])
 
         hidden_outputs = [h.output for h in self.hidden_layer]
         for o in self.output_layer:
@@ -65,13 +71,6 @@ class NeuralNetwork:
             self.loss_history["test"].append(avg_test_loss)
             if epoch % 100 == 0:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}")
-
-    def predict(self, X):
-        preds = []
-        for xi in X:
-            _, outputs = self.forward(xi)
-            preds.append(outputs[0])
-        return np.array(preds)
     
     def save_plots(self, path):
         plt.plot(self.loss_history["training"], label='Training Loss')

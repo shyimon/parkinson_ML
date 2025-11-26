@@ -10,7 +10,7 @@ class Neuron:
         self.net = 0.0
         self.output = 0.0
         self.delta = 0.0
-        self.inputs = None
+        self.inputs = []
         self.in_output_neurons = []
         self.activation_function_type = activation_function_type
     
@@ -35,22 +35,24 @@ class Neuron:
         else:
             raise ValueError(f"The specified activation function {self.activation_function_type} is not implemented as of yet.")
 
-    def predict(self, inputs):
-        inputs = np.array(inputs, dtype=float)
-        self.inputs = inputs
+    def feed_neuron(self, inputs):
+        self.inputs = np.array(inputs, dtype=float)
+        # print(f"\n\nInputs: {self.inputs}\nWeights:{self.weights}")
         self.net = float(np.dot(self.weights, inputs)) + self.bias
         self.output = self.activation_funct(self.net)
         return self.output
 
-    def compute_delta_output(self, target):
-        self.delta = (target - self.output) * self.activation_deriv(self.activation_funct(self.net))
-    
-    def compute_delta_hidden(self):
-        delta_sum = 0.0
-        for k in self.in_output_neurons:
-            w_kj = k.weights[self.index_in_layer]
-            delta_sum += k.delta * w_kj
-        self.delta = delta_sum * self.activation_deriv(self.activation_funct(self.net))
+    def compute_delta(self, target):
+        if self.is_output_neuron:
+            self.delta = (target - self.output) * self.activation_deriv(self.activation_funct(self.net))
+            return self.delta
+        else:
+            delta_sum = 0.0
+            for k in self.in_output_neurons:
+                w_kj = k.weights[self.index_in_layer]
+                delta_sum += k.delta * w_kj
+                self.delta = delta_sum * self.activation_deriv(self.activation_funct(self.net))
+                return self.delta
 
     def update_weights(self, eta):
         self.weights += eta * self.delta * self.inputs
