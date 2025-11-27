@@ -3,13 +3,9 @@ import numpy as np
 import pandas as pd
 import math
 
-def normalize_data(X):
-    """Normalizza i dati nell'intervallo [0, 1]"""
-    return (X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0) + 1e-8)
-
 def return_monk1():
-    train_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
-    test_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test'
+    train_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.train'
+    test_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
 
     train_set = pd.read_csv(train_set_url, header=None, names=column_names, delim_whitespace=True)
@@ -134,31 +130,27 @@ class MultiLayerPerceptron:
 # Carica i dati
 X_train, y_train, X_test, y_test = return_monk1()
 
-# Normalizza i dati
-X_train_normalized = normalize_data(X_train)
-X_test_normalized = normalize_data(X_test)
-
 # Parametri della rete
-num_inputs = X_train_normalized.shape[1]
-num_hidden = 4      # Ridotto per MONK-1
+num_inputs = X_train.shape[1]
+num_hidden = 5      # Ridotto per MONK-1
 num_outputs = 1
 eta = 0.2           # Learning rate aumentato
 
 # Crea e allena la rete 
 mlp = MultiLayerPerceptron(num_inputs, num_hidden, num_outputs, eta)
 print("Inizio training...")
-mlp.fit(X_train_normalized, y_train, epochs=500)
+mlp.fit(X_train, y_train, epochs=1000)
 
 # Predizioni e accuracy
 print("\nCalcolo accuracy...")
-y_pred = mlp.predict(X_train_normalized)
+y_pred = mlp.predict(X_train)
 y_pred_class = np.where(y_pred >= 0.5, 1, 0)
 
 accuracy = np.mean(y_pred_class == y_train) * 100
 print(f"\nFinal Training Accuracy: {accuracy:.2f}%")
 
 # Test accuracy
-y_pred_test = mlp.predict(X_test_normalized)
+y_pred_test = mlp.predict(X_test)
 y_pred_test_class = np.where(y_pred_test >= 0.5, 1, 0)
 test_accuracy = np.mean(y_pred_test_class == y_test) * 100
 print(f"Test Accuracy: {test_accuracy:.2f}%")
