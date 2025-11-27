@@ -328,28 +328,3 @@ def main():
 if __name__ == "__main__":
         main()
     
-""""
-# Crea e allena la rete 
-mlp = MultiLayerPerceptron(num_inputs, num_hidden, num_outputs, eta)
-print("Inizio training...")
-mlp.fit(X_train, y_train, epochs=700)
-
-# Predizioni e accuracy
-print("\nCalcolo accuracy...")
-y_pred = mlp.predict(X_train)
-y_pred_class = np.where(y_pred >= 0.5, 1, 0)
-
-accuracy = np.mean(y_pred_class == y_train) * 100
-print(f"\nFinal Training Accuracy: {accuracy:.2f}%")
-
-# Test accuracy
-y_pred_test = mlp.predict(X_test)
-y_pred_test_class = np.where(y_pred_test >= 0.5, 1, 0)
-test_accuracy = np.mean(y_pred_test_class == y_test) * 100
-print(f"Test Accuracy: {test_accuracy:.2f}%")
-
-# Dettagli aggiuntivi
-print(f"\nDettagli:")
-print(f"Pattern corretti: {np.sum(y_pred_class == y_train)}/{len(y_train)}")
-print(f"Pattern test corretti: {np.sum(y_pred_test_class == y_test)}/{len(y_test)}")
-"""
