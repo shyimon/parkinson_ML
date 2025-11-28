@@ -5,8 +5,8 @@ import math
 import itertools
 
 def return_monk1():
-    train_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
-    test_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test'
+    train_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.train'
+    test_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
 
     train_set = pd.read_csv(train_set_url, header=None, names=column_names, delim_whitespace=True)
@@ -38,8 +38,6 @@ class Neuron:
 
     def sigmoid(self, x):
         # Aggiunta di clipping per evitare overflow
-        # ovvero: Aggiungere un controllo che impedisca ai valori 
-        # di superare i limiti consentiti, tagliandoli entro un intervallo sicuro.
         x = np.clip(x, -500, 500)
         return 1 / (1 + math.exp(-x))
 
@@ -55,14 +53,14 @@ class Neuron:
         return self.output
 
     def compute_delta_output(self, target):
-        self.delta = (target - self.output) * self.derivative_sigmoid(self.net) 
+        self.delta = (target - self.output) * self.derivative_sigmoid(self.net)
     
     def compute_delta_hidden(self):
         delta_sum = 0.0
         for k in self.in_output_neurons:
             w_kj = k.weights[self.index_in_layer]
             delta_sum += k.delta * w_kj
-        self.delta = delta_sum * self.derivative_sigmoid(self.net) 
+        self.delta = delta_sum * self.derivative_sigmoid(self.net)
 
     def update_weights(self, eta):
         self.weights += eta * self.delta * self.inputs
@@ -70,7 +68,6 @@ class Neuron:
 
 class MultiLayerPerceptron:
     def __init__(self, num_inputs, num_hidden, num_outputs=1, eta=0.2):
-        
         self.num_inputs = num_inputs
         self.num_hidden = num_hidden
         self.num_outputs = num_outputs
@@ -106,7 +103,7 @@ class MultiLayerPerceptron:
         for h in self.hidden_layer:
             h.update_weights(self.eta)
    
-    def fit(self, X, y, epochs=700):
+    def fit(self, X, y, epochs=1000):
         X = np.array(X, dtype=float)
         y = np.array(y, dtype=float)
 
@@ -327,4 +324,3 @@ def main():
 
 if __name__ == "__main__":
         main()
-    
