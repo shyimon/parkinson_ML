@@ -13,7 +13,7 @@ class NeuralNetwork:
         self.layers = []
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, activation_function_type="tanh", is_output_neuron=False) for j in range(network_structure[0])])
         for i in range(len(network_structure) - 1):
-            self.layers.append([neuron.Neuron(num_inputs=network_structure[i], index_in_layer=j, activation_function_type="tanh", is_output_neuron=(i==len(network_structure)-1)) for j in range(network_structure[i + 1])])
+            self.layers.append([neuron.Neuron(num_inputs=network_structure[i], index_in_layer=j, activation_function_type="tanh", is_output_neuron=(i==len(network_structure)-2)) for j in range(network_structure[i + 1])])
 
         for l in range(len(self.layers) - 1):
             for n in self.layers[l]:
@@ -31,7 +31,7 @@ class NeuralNetwork:
         return np.array(preds)
 
     def backward(self, y_true):
-        for l in reversed(self.layers):
+        for l in reversed(self.layers[1:]):
             for n in l:
                 n.compute_delta(y_true)
 
@@ -58,7 +58,8 @@ class NeuralNetwork:
             self.loss_history["training"].append(avg_loss)
 
             y_pred_test = self.predict(X_test)
-            test_loss = 0.5 * sum(y_test - y_pred_test) ** 2
+            diff = y_test - y_pred_test.flatten()
+            test_loss = 0.5 * np.sum(diff ** 2)
             avg_test_loss = test_loss / len(y_test)
             self.loss_history["test"].append(avg_test_loss)
             if epoch % 100 == 0:

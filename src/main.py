@@ -7,7 +7,7 @@ import neural_network as nn
 
 # === MAIN EXECUTION ===
 # Carica i dati
-X_train, y_train, X_test, y_test = data.return_monk2()
+X_train, y_train, X_test, y_test = data.return_monk1()
 
 # Normalizza i dati
 X_train_normalized = data.normalize(X_train, -1, 1)
@@ -20,7 +20,7 @@ num_outputs = 1
 eta = 0.05           # Learning rate aumentato
 
 # Crea e allena la rete 
-mlp = nn.NeuralNetwork([6, 4, 1], eta)
+mlp = nn.NeuralNetwork([6, 4, 1], eta=eta)
 print("Inizio training...")
 mlp.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=500)
 

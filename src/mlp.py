@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import utils
 
 class NeuralNetwork:
-    def __init__(self, num_inputs, num_hidden, num_outputs=1, eta=0.1):
+    def __init__(self, network_structure, num_inputs=6, num_hidden=4, num_outputs=1, eta=0.1):
         self.num_inputs = num_inputs
         self.num_hidden = num_hidden
         self.num_outputs = num_outputs
@@ -76,5 +76,5 @@ class NeuralNetwork:
         plt.plot(self.loss_history["training"], label='Training Loss')
         plt.plot(self.loss_history["test"], label='Test Loss')
         plt.legend()
-        plt.ylim(0, 1)
+        plt.ylim(0, max(self.loss_history["training"]))
         plt.savefig(path)

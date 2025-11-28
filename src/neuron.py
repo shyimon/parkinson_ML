@@ -44,15 +44,14 @@ class Neuron:
 
     def compute_delta(self, target):
         if self.is_output_neuron:
-            self.delta = (target - self.output) * self.activation_deriv(self.activation_funct(self.net))
-            return self.delta
+            self.delta = (target - self.output) * self.activation_deriv(self.output)
         else:
             delta_sum = 0.0
             for k in self.in_output_neurons:
                 w_kj = k.weights[self.index_in_layer]
                 delta_sum += k.delta * w_kj
-                self.delta = delta_sum * self.activation_deriv(self.activation_funct(self.net))
-                return self.delta
+                self.delta = delta_sum * self.activation_deriv(self.output)
+        return self.delta
 
     def update_weights(self, eta):
         self.weights += eta * self.delta * self.inputs
