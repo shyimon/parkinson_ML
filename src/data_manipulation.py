@@ -48,7 +48,7 @@ def return_monk3():
 
     return monk3_train_X, monk3_train_y, monk3_test_X, monk3_test_y
 
-# Normalization method
+# Linear normalization method between a max and min value passed as parameters 
 def normalize(X, min, max):
     if (X.max(axis=0) - X.min(axis=0)).any == 0:
         raise ZeroDivisionError("Division by zero prevented: the minimum and maximum elements for the training examples are equal, invalid dataset.")

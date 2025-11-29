@@ -1,10 +1,10 @@
 from graphviz import Digraph
 
-def draw_network(layers, weights=None, filename="img/network"):
+# A method to render and save a graphical representation of the nerwork passed using the graphviz library
+def draw_network(layers, filename="img/network"):
     dot = Digraph(format="png")
     dot.attr(rankdir='LR', splines='line', ranksep='3')
 
-    # create nodes
     for i in range(len(layers)):
         with dot.subgraph(name=f"cluster_{i}") as c:
             if i == 0:

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import utils
 
 class NeuralNetwork:
+    # Constructor
     # network_structure is the number of neurons in input, hidden layers
     # and output, expressed as an array. For example [6, 2, 2, 1].
     def __init__(self, network_structure, eta=0.1):
@@ -19,17 +20,21 @@ class NeuralNetwork:
             for n in self.layers[l]:
                 n.attach_to_output(self.layers[l + 1])
 
+    # a single example is propagated through the network, calling
+    # the feed_neuron method for each neuron
     def forward(self, x):
         for l in range(len(self.layers) - 1):
             x = [n.feed_neuron(x) for n in self.layers[l + 1]]
         return x
 
+    # streamlines and encapsulates the forwarding of multiple examples
     def predict(self, X):
         preds = []
         for xi in X:
             preds.append(self.forward(xi))
         return np.array(preds)
 
+    # backprop implementation
     def backward(self, y_true):
         for l in reversed(self.layers[1:]):
             for n in l:
@@ -39,7 +44,10 @@ class NeuralNetwork:
             for n in self.layers[l]:
                 n.update_weights(self.eta)
 
-
+    # core training method.
+    # the test set is passed purely to assess the test error at each step but is not used for
+    # learning, to keep the test set "unseen".
+    # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
     def fit(self, X, X_test, y, y_test, epochs=1000):
         X = np.array(X, dtype=float)
         y = np.array(y, dtype=float)
@@ -62,10 +70,11 @@ class NeuralNetwork:
             test_loss = 0.5 * np.sum(diff ** 2)
             avg_test_loss = test_loss / len(y_test)
             self.loss_history["test"].append(avg_test_loss)
-            if epoch % 100 == 0:
+            if epoch % 25 == 0:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}")
         utils.draw_network(self.layers)
 
+    # a method to save the losses of the training and test sets as a plot
     def save_plots(self, path):
         plt.plot(self.loss_history["training"], label='Training Loss')
         plt.plot(self.loss_history["test"], label='Test Loss')
