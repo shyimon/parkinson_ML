@@ -22,10 +22,10 @@ eta = 0.05           # Learning rate
 # Network is created and trained
 nn = nn.NeuralNetwork(network_structure, eta=eta)
 print("Start training...")
-nn.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=500)
+nn.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=300)
 
 # Accuracy is computed for the training set
-print("\\Calculating accuracy...")
+print("\nCalculating accuracy...")
 y_pred = nn.predict(X_train_normalized)
 y_pred_class = np.where(y_pred >= 0.5, 1, 0)
 

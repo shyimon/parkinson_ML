@@ -1,13 +1,17 @@
 import pandas as pd
 
 # Monk datasets are returned separately and splitted into training, test, parameters and targets
-def return_monk1():
+def return_monk1(dataset_shuffle=True):
     monk1_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
     monk1_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
 
     monk1_train = pd.read_csv(monk1_train_url, header=None, names=column_names, sep="\\s+")
     monk1_test = pd.read_csv(monk1_test_url, header=None, names=column_names, sep="\\s+")
+
+    if dataset_shuffle:
+        monk1_train = monk1_train.sample(frac=1).reset_index(drop=True)
+        monk1_test = monk1_test.sample(frac=1).reset_index(drop=True)
 
     monk1_train_X = monk1_train.drop(columns=['class', 'id']).to_numpy()
     monk1_train_y = monk1_train['class'].to_numpy()
@@ -17,13 +21,17 @@ def return_monk1():
     return monk1_train_X, monk1_train_y, monk1_test_X, monk1_test_y
 
 
-def return_monk2():
+def return_monk2(dataset_shuffle=True):
     monk2_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.train'
     monk2_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
 
     monk2_train = pd.read_csv(monk2_train_url, header=None, names=column_names, sep="\\s+")
     monk2_test = pd.read_csv(monk2_test_url, header=None, names=column_names, sep="\\s+")
+
+    if dataset_shuffle:
+        monk2_train = monk2_train.sample(frac=1).reset_index(drop=True)
+        monk2_test = monk2_test.sample(frac=1).reset_index(drop=True)
 
     monk2_train_X = monk2_train.drop(columns=['class', 'id']).to_numpy()
     monk2_train_y = monk2_train['class'].to_numpy()
@@ -33,13 +41,17 @@ def return_monk2():
     return monk2_train_X, monk2_train_y, monk2_test_X, monk2_test_y
 
 
-def return_monk3():
+def return_monk3(dataset_shuffle=True):
     monk3_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.train'
     monk3_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
 
     monk3_train = pd.read_csv(monk3_train_url, header=None, names=column_names, sep="\\s+")
     monk3_test = pd.read_csv(monk3_test_url, header=None, names=column_names, sep="\\s+")
+
+    if dataset_shuffle:
+        monk3_train = monk3_train.sample(frac=1).reset_index(drop=True)
+        monk3_test = monk3_test.sample(frac=1).reset_index(drop=True)
 
     monk3_train_X = monk3_train.drop(columns=['class', 'id']).to_numpy()
     monk3_train_y = monk3_train['class'].to_numpy()

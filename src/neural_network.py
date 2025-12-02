@@ -31,7 +31,11 @@ class NeuralNetwork:
     def predict(self, X):
         preds = []
         for xi in X:
-            preds.append(self.forward(xi))
+            out = self.forward(xi)
+            if isinstance(out, (list, np.ndarray)):
+                preds.append(float(out[0]))
+            else:
+                preds.append(float(out))
         return np.array(preds)
 
     # backprop implementation
@@ -78,7 +82,7 @@ class NeuralNetwork:
         plt.plot(self.loss_history["training"], label='Training Loss')
         plt.plot(self.loss_history["test"], label='Test Loss')
         plt.legend()
-        plt.ylim(0, 1)
+        plt.ylim(0, max(max(self.loss_history["training"]), max(self.loss_history["test"])) * 1.1)
         plt.savefig(path)
         
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
