@@ -7,22 +7,24 @@ import neural_network as nn
 
 # === MAIN EXECUTION ===
 # Loading of data
-X_train, y_train, X_test, y_test = data.return_monk1()
+X_train, y_train, X_test, y_test = data.return_monk3(one_hot=True)
 
 # Normalization
-X_train_normalized = data.normalize(X_train, -1, 1)
-X_test_normalized = data.normalize(X_test, -1, 1)
+# X_train_normalized = data.normalize(X_train, 0, 1)
+# X_test_normalized = data.normalize(X_test, 0, 1)
+X_train_normalized = X_train
+X_test_normalized = X_test
 
 # Definition of network structure
 network_structure = [X_train_normalized.shape[1]]
 network_structure.append(4)  # Hidden layer with 4 neurons
 network_structure.append(1)  # Output layer with 1 neuron
-eta = 0.05           # Learning rate
+eta = 0.7           # Learning rate
 
 # Network is created and trained
 nn = nn.NeuralNetwork(network_structure, eta=eta)
 print("Start training...")
-nn.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=300)
+nn.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=500)
 
 # Accuracy is computed for the training set
 print("\nCalculating accuracy...")
