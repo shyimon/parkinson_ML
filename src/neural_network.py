@@ -58,7 +58,7 @@ class NeuralNetwork:
             for xi, yi in zip(X, y):
                 outputs = self.forward(xi)
                 y_pred = outputs[0]
-                total_loss += 0.5 * (yi - y_pred) ** 2
+                total_loss += self.compute_loss(yi, y_pred, loss_type="half_mse")
 
                 self.backward(yi)
 
@@ -66,8 +66,7 @@ class NeuralNetwork:
             self.loss_history["training"].append(avg_loss)
 
             y_pred_test = self.predict(X_test)
-            diff = y_test - y_pred_test.flatten()
-            test_loss = 0.5 * np.sum(diff ** 2)
+            test_loss = np.sum(self.compute_loss(y_test, y_pred_test.flatten(), loss_type="half_mse"))
             avg_test_loss = test_loss / len(y_test)
             self.loss_history["test"].append(avg_test_loss)
             if epoch % 25 == 0:
@@ -81,3 +80,19 @@ class NeuralNetwork:
         plt.legend()
         plt.ylim(0, 1)
         plt.savefig(path)
+        
+    def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
+        """
+        Calcola la loss per un singolo esempio (quando verrà implementato il mini-batch
+        adatterò questa funzione di conseguenza) e gestisce sia valori singoli che array.
+        Args:
+            y_true (float o array): Valore target vero.
+            y_pred (float o array): Valore predetto dalla rete neurale.
+            loss_type (str): Tipo di loss da calcolare.
+        Returns:
+            float o array: Valore della loss calcolata.
+        """
+        if loss_type == "half_mse":
+            return 0.5 * (y_true - y_pred) ** 2
+        else:
+            raise ValueError(f"Loss type '{loss_type}' not implemented.")
