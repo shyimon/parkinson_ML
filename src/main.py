@@ -25,7 +25,7 @@ print("Start training...")
 nn.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=500)
 
 # Accuracy is computed for the training set
-print("\Calculating accuracy...")
+print("\\Calculating accuracy...")
 y_pred = nn.predict(X_train_normalized)
 y_pred_class = np.where(y_pred >= 0.5, 1, 0)
 
