@@ -5,12 +5,6 @@ import time
 import json
 
 def train_final_model_multiple_runs(X_train, y_train, X_test, y_test, params, n_runs=10):
-    """
-    Allena il modello finale più volte per stimare accuratamente l'errore.
-    
-    Returns:
-        (mean_accuracy, std_accuracy, all_accuracies)
-    """
     import neural_network as nn
     
     all_accuracies = []
@@ -36,7 +30,7 @@ def train_final_model_multiple_runs(X_train, y_train, X_test, y_test, params, n_
         
         # Allena
         net.fit(X_train, X_test, y_train, y_test, 
-                epochs=params['epochs'], verbose=False)
+                epochs=params['epochs'])
         
         # Valuta sul test set
         predictions = net.predict(X_test)
@@ -62,48 +56,35 @@ def train_final_model_multiple_runs(X_train, y_train, X_test, y_test, params, n_
     return mean_acc, std_acc, all_accuracies
 
 def main():
-    """Programma principale per ricerca dicotomica."""
     print("="*70)
     print("RICERCA DICOTOMICA - RETE NEURALE MONK DATASET")
     print("="*70)
     
-    # Carica i dati MONK1 (con one-hot encoding)
-    print("\n📊 Caricamento dataset MONK1...")
+    # Carico i dati MONK1 
     X_train_raw, y_train, X_test_raw, y_test = data.return_monk1()
     
     print(f"Forma dati grezzi:")
-    print(f"  X_train: {X_train_raw.shape} (primi 3 esempi: {X_train_raw[:3].tolist()})")
+    print(f"  X_train: {X_train_raw.shape}")
     print(f"  y_train: {y_train.shape}")
     print(f"  X_test:  {X_test_raw.shape}")
     print(f"  y_test:  {y_test.shape}")
     
-    # I dati MONK sono già categorici (one-hot), non serve normalizzare
-    # In realtà sono già valori 1, 2, 3... per ogni attributo
-    # Li convertiamo in one-hot encoding manualmente
-    print(f"\n🔍 Analisi attributi dataset...")
-    print(f"Valori unici per colonna:")
-    for i in range(X_train_raw.shape[1]):
-        unique_vals = np.unique(X_train_raw[:, i])
-        print(f"  Attributo {i+1}: {sorted(unique_vals.tolist())}")
-    
-    # Per semplicità, usiamo i dati così come sono (già categorici)
-    # Normalizziamo tra -1 e 1 per compatibilità con tanh
+    # Normalizzo tra -1 e 1 per compatibilità con tanh
     X_train = data.normalize(X_train_raw, -1, 1)
     X_test = data.normalize(X_test_raw, -1, 1)
     
-    print(f"\n📈 Dati dopo normalizzazione [-1, 1]:")
+    print(f"\n Dati dopo normalizzazione [-1, 1]:")
     print(f"  X_train range: [{X_train.min():.2f}, {X_train.max():.2f}]")
     print(f"  X_test range:  [{X_test.min():.2f}, {X_test.max():.2f}]")
     
-    # Inizializza grid search dicotomica
-    print(f"\n🔬 Configurazione ricerca dicotomica...")
+    # Inizializzo grid search dicotomica
+    print(f"\n Configurazione ricerca dicotomica")
     grid_search = SimpleGridSearchCV(
         cv_folds=5,
         verbose=True,
         results_dir='dichotomic_results'
     )
     
-    # Esegui ricerca dicotomica
     print(f"\n" + "="*70)
     print("AVVIO RICERCA DICOTOMICA")
     print("="*70)
@@ -113,21 +94,20 @@ def main():
     search_time = time.time() - start_time
     
     if best_params:
-        print(f"\n⏱️  Tempo ricerca: {search_time:.2f} secondi")
+        print(f"\n Tempo ricerca: {search_time:.2f} secondi")
         
-        # ALLENAMENTO E VALUTAZIONE FINALE
+        
         print(f"\n" + "="*70)
         print("ALLENAMENTO FINALE SU TRAINING COMPLETO")
         print("="*70)
         
-        # Cross-validation results
         print(f"\n📊 RISULTATI CROSS-VALIDATION (5-fold):")
         print(f"  Accuracy media:   {cv_mean:.2f}%")
-        print(f"  Deviazione std:   ±{cv_std:.2f}%")
+        print(f"  Deviazione sandard:   ±{cv_std:.2f}%")
         print(f"  Intervallo 95%:   [{cv_mean - 1.96*cv_std:.2f}%, {cv_mean + 1.96*cv_std:.2f}%]")
         
-        # Allenamento finale multiplo per stima errore accurata
-        print(f"\n🎯 ALLENAMENTO FINALE E TEST:")
+       
+        print(f"\n TRAINING FINALE E TEST:")
         test_mean, test_std, all_test_accs = train_final_model_multiple_runs(
             X_train, y_train, X_test, y_test, best_params, n_runs=10
         )
@@ -139,61 +119,15 @@ def main():
         
         # RISULTATI FINALI
         print(f"\n" + "="*70)
-        print("RISULTATI FINALI COMPLETI")
+        print("RISULTATI FINALI")
         print("="*70)
         
-        print(f"\n📈 STATISTICHE TEST SET (10 run):")
+        print(f"\n STATISTICHE TEST SET (10 run):")
         print(f"  Media:        {test_mean:.2f}%")
         print(f"  Deviazione:   ±{test_std:.2f}%")
-        print(f"  Mediana:      {test_median:.2f}%")
         print(f"  Minimo:       {test_min:.2f}%")
         print(f"  Massimo:      {test_max:.2f}%")
         print(f"  Intervallo:   [{test_mean - 1.96*test_std:.2f}%, {test_mean + 1.96*test_std:.2f}%]")
-        
-        # Confronto dettagliato delle predizioni (prima run)
-        import neural_network as nn
-        structure = [X_train.shape[1], best_params['hidden_neurons'], 1]
-        net_final = nn.NeuralNetwork(structure, eta=best_params['learning_rate'])
-        
-        # Inizializzazione Xavier
-        for layer_idx, layer in enumerate(net_final.layers):
-            if layer_idx == 0:
-                continue
-            for neuron in layer:
-                n_inputs = len(neuron.weights)
-                if n_inputs > 0:
-                    limit = np.sqrt(6.0 / (n_inputs + 1))
-                    neuron.weights = np.random.uniform(-limit, limit, n_inputs)
-                neuron.bias = 0.0
-        
-        # Allena una volta per analisi dettagliata
-        net_final.fit(X_train, X_test, y_train, y_test, 
-                     epochs=best_params['epochs'], verbose=True)
-        
-        # Predizioni dettagliate
-        predictions = net_final.predict(X_test)
-        pred_classes = (predictions >= 0.5).astype(int)
-        
-        # Calcola accuratezza dettagliata
-        correct = np.sum(pred_classes == y_test)
-        total = len(y_test)
-        accuracy_detail = correct / total * 100
-        
-        print(f"\n🎯 RISULTATO DETTAGLIATO (singola run migliore):")
-        print(f"  Corretti:     {correct}/{total}")
-        print(f"  Accuracy:     {accuracy_detail:.2f}%")
-        
-        # Analisi errori
-        errors = pred_classes != y_test
-        if np.any(errors):
-            error_indices = np.where(errors)[0]
-            print(f"  Errori:       {len(error_indices)} esempi")
-            if len(error_indices) > 0:
-                print(f"  Primo errore (indice {error_indices[0]}):")
-                print(f"    Input:      {X_test_raw[error_indices[0]]}")
-                print(f"    Predetto:   {pred_classes[error_indices[0]]}")
-                print(f"    Reale:      {y_test[error_indices[0]]}")
-                print(f"    Probabilità: {predictions[error_indices[0]]:.4f}")
         
         # Salva risultati finali
         final_results = {
@@ -215,10 +149,7 @@ def main():
                 'accuracy_max': float(test_max),
                 'all_accuracies': [float(acc) for acc in all_test_accs],
                 'confidence_95_lower': float(test_mean - 1.96*test_std),
-                'confidence_95_upper': float(test_mean + 1.96*test_std),
-                'correct_count': int(correct),
-                'total_count': int(total),
-                'detailed_accuracy': float(accuracy_detail)
+                'confidence_95_upper': float(test_mean + 1.96*test_std)
             },
             'data_info': {
                 'training_samples': int(X_train.shape[0]),
@@ -233,37 +164,37 @@ def main():
         with open(results_file, 'w') as f:
             json.dump(final_results, f, indent=2)
         
-        print(f"\n💾 Risultati finali salvati in: {results_file}")
+        print(f"\n Risultati finali salvati in: {results_file}")
         
         return best_params, test_mean, test_std, all_test_accs
     
     return None, 0, 0, []
 
 if __name__ == "__main__":
-    print("\n🚀 INIZIO ESPERIMENTO RICERCA DICOTOMICA")
+    print("\n INIZIO RICERCA DICOTOMICA")
     print("="*70)
     
     best_params, final_acc, final_std, all_accs = main()
     
     if best_params:
         print("\n" + "="*70)
-        print("RIEPILOGO ESPERIMENTO")
+        print("RIEPILOGO RICERCA")
         print("="*70)
-        print(f"\n✅ RISULTATO FINALE: {final_acc:.2f}% ± {final_std:.2f}%")
-        print(f"\n⚙️  PARAMETRI OTTIMALI:")
+        print(f"\n RISULTATO FINALE: {final_acc:.2f}% ± {final_std:.2f}%")
+        print(f"\n PARAMETRI OTTIMALI:")
         for param, value in best_params.items():
             print(f"  {param:15s}: {value}")
         
         if all_accs:
-            print(f"\n📊 DISTRIBUZIONE ACCURACY (10 run):")
+            print(f"\n DISTRIBUZIONE ACCURACY (10 run):")
             for i, acc in enumerate(all_accs):
                 print(f"  Run {i+1:2d}: {acc:6.2f}%")
         
-        print(f"\n🎯 INTERPRETAZIONE:")
-        print(f"  L'accuratezza finale è {final_acc:.2f}% con un errore di ±{final_std:.2f}%")
+        print(f"\n INTERPRETAZIONE:")
+        print(f"  L'accuracy finale è {final_acc:.2f}% con un errore di ±{final_std:.2f}%")
         print(f"  Ciò significa che ci aspettiamo prestazioni tra")
         print(f"  {final_acc - 1.96*final_std:.2f}% e {final_acc + 1.96*final_std:.2f}% nel 95% dei casi")
     
     print("\n" + "="*70)
-    print("ESPERTIMENTO COMPLETATO")
+    print("RICERCA COMPLETATA")
     print("="*70)

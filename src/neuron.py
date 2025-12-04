@@ -3,18 +3,18 @@ import math
 
 class Neuron:
     # Constructor
-    def __init__(self, num_inputs, index_in_layer, is_output_neuron=False, activation_function_type="tanh"):
+    def __init__(self, num_inputs, index_in_layer, is_output_neuron=False, activation_function_type="tanh", weight_initializer='xavier', bias_initializer='uniform'):
         self.index_in_layer = index_in_layer
         self.is_output_neuron = is_output_neuron
         self.weights = np.random.uniform(-0.5, 0.5, size=num_inputs)
         self.bias = np.random.uniform(-0.5, 0.5)
+        self.activation_function_type = activation_function_type
         self.net = 0.0
         self.output = 0.0
         self.delta = 0.0
         self.inputs = []
         self.attached_neurons = []
-        self.activation_function_type = activation_function_type
-    
+        
     # Updates the list of output neurons
     def attach_to_output(self, neurons):
         self.attached_neurons = list(neurons)

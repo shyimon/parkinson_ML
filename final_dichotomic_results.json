@@ -1,0 +1,44 @@
+{
+  "dataset": "MONK1",
+  "timestamp": "2025-12-04 10:02:15",
+  "search_time_seconds": 213.28844571113586,
+  "best_parameters": {
+    "learning_rate": 0.05,
+    "hidden_neurons": 6,
+    "epochs": 400,
+    "cv_seed": 42
+  },
+  "cross_validation": {
+    "accuracy_mean": 95.83333333333333,
+    "accuracy_std": 8.333333333333337,
+    "confidence_95_lower": 79.49999999999999,
+    "confidence_95_upper": 112.16666666666667
+  },
+  "test_set_final": {
+    "accuracy_mean": 97.06018518518519,
+    "accuracy_std": 7.847222222222222,
+    "accuracy_median": 100.0,
+    "accuracy_min": 73.61111111111111,
+    "accuracy_max": 100.0,
+    "all_accuracies": [
+      100.0,
+      100.0,
+      73.61111111111111,
+      99.30555555555556,
+      97.68518518518519,
+      100.0,
+      100.0,
+      100.0,
+      100.0,
+      100.0
+    ],
+    "confidence_95_lower": 81.67962962962963,
+    "confidence_95_upper": 112.44074074074075
+  },
+  "data_info": {
+    "training_samples": 124,
+    "test_samples": 432,
+    "input_features": 6,
+    "normalization": "range [-1, 1]"
+  }
+}

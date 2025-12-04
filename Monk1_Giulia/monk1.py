@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import math
 import itertools
+from sklearn.metrics import accuracy_score, classification_report
+import time
 
 def return_monk1():
     train_set_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
@@ -21,310 +23,408 @@ def return_monk1():
     
     return X_train, y_train, X_test, y_test
 
-class Neuron:
-    def __init__(self, num_inputs, index_in_layer, is_output_neuron=False):
-        self.index_in_layer = index_in_layer
-        self.is_output_neuron = is_output_neuron
-        self.weights = np.random.uniform(-0.5, 0.5, size=num_inputs)
-        self.bias = np.random.uniform(-0.5, 0.5) # la scelta del valore del bias è da giustificare con una grid search
-        self.net = 0.0
-        self.output = 0.0
-        self.delta = 0.0
-        self.inputs = None
-        self.in_output_neurons = []
-
-    def attach_to_output(self, neurons):
-        self.in_output_neurons = list(neurons)
-
-    def sigmoid(self, x):
-        # Aggiunta di clipping per evitare overflow
-        # ovvero: Aggiungere un controllo che impedisca ai valori 
-        # di superare i limiti consentiti, tagliandoli entro un intervallo sicuro.
-        x = np.clip(x, -500, 500)
-        return 1 / (1 + math.exp(-x))
-
-    def derivative_sigmoid(self, x):
-        s = self.sigmoid(x)
-        return s * (1 - s)
-
-    def predict(self, inputs):
-        inputs = np.array(inputs, dtype=float)
-        self.inputs = inputs
-        self.net = float(np.dot(self.weights, inputs)) + self.bias
-        self.output = self.sigmoid(self.net)
-        return self.output
-
-    def compute_delta_output(self, target):
-        self.delta = (target - self.output) * self.derivative_sigmoid(self.net) 
-    
-    def compute_delta_hidden(self):
-        delta_sum = 0.0
-        for k in self.in_output_neurons:
-            w_kj = k.weights[self.index_in_layer]
-            delta_sum += k.delta * w_kj
-        self.delta = delta_sum * self.derivative_sigmoid(self.net) 
-
-    def update_weights(self, eta):
-        self.weights += eta * self.delta * self.inputs
-        self.bias += eta * self.delta
-
-class MultiLayerPerceptron:
-    def __init__(self, num_inputs, num_hidden, num_outputs=1, eta=0.2):
+class CascadeCorrelation:
+    def __init__(self, input_size, activation_function='tanh', weight_init_range=(-0.1, 0.1), use_bias=True):
+        self.input_size = input_size
+        self.activation_function_name = activation_function
+        self.activation_function = self._get_activation_function(activation_function)
+        self.weight_init_range = weight_init_range
+        self.use_bias = use_bias
         
-        self.num_inputs = num_inputs
-        self.num_hidden = num_hidden
-        self.num_outputs = num_outputs
-        self.eta = eta
-        self.loss_history = []
-
-        self.hidden_layer = [Neuron(num_inputs=num_inputs, index_in_layer=j) for j in range(num_hidden)]
-        self.output_layer = [Neuron(num_inputs=num_hidden, index_in_layer=k, is_output_neuron=True) for k in range(num_outputs)]
-
-        for h in self.hidden_layer:
-            h.attach_to_output(self.output_layer)
-
-    def forward(self, x):
-        hidden_outputs = [h.predict(x) for h in self.hidden_layer]
-        outputs = [o.predict(hidden_outputs) for o in self.output_layer]
-        return hidden_outputs, outputs
+        # Inizializza i pesi nel costruttore
+        self._initialize_weights(input_size)
+        
+        # Altri attributi
+        self.hidden_units = []
+        self.hidden_weights = []
+        self.max_hidden_units = 5  # Valore di default, verrà sovrascritto
+        self.learning_rate = 0.1
+        self.training_history = []
     
-    def backward(self, x, y_true):
-        if self.num_outputs == 1:
-            y_true = [y_true]
-
-        for k, o in enumerate(self.output_layer):
-            o.compute_delta_output(y_true[k])
-
-        for h in self.hidden_layer:
-            h.compute_delta_hidden()
-
-        hidden_outputs = [h.output for h in self.hidden_layer]
-        for o in self.output_layer:
-            o.inputs = np.array(hidden_outputs, dtype=float)
-            o.update_weights(self.eta)
-
-        for h in self.hidden_layer:
-            h.update_weights(self.eta)
-   
-    def fit(self, X, y, epochs=700):
-        X = np.array(X, dtype=float)
-        y = np.array(y, dtype=float)
-
-        for epoch in range(epochs):
-            total_loss = 0.0
-            for xi, yi in zip(X, y):
-                _, outputs = self.forward(xi)
-                y_pred = outputs[0]
-                total_loss += 0.5 * (yi - y_pred) ** 2
-                self.backward(xi, yi)
-
-            if epoch % 100 == 0:
-                avg_loss = total_loss / len(X)
-                self.loss_history.append(avg_loss)
-                print(f"Epoch {epoch}, Loss: {avg_loss:.6f}")
-
+    def _initialize_weights(self, input_size):
+        """Inizializza i pesi dello strato di output"""
+        low, high = self.weight_init_range
+        self.output_weights = np.random.uniform(low, high, (1, input_size))
+        
+        if self.use_bias:
+            self.output_bias = np.random.uniform(low, high, 1)
+        else:
+            self.output_bias = np.array([0.0])
+    
+    def _get_activation_function(self, name):
+        """Restituisce la funzione di attivazione"""
+        if name == 'tanh':
+            return np.tanh
+        elif name == 'sigmoid':
+            return lambda x: 1 / (1 + np.exp(-x))
+        else:
+            return np.tanh
+    
+    def _compute_output(self, x):
+        """Calcola l'output della rete"""
+        x = np.array(x)
+        
+        # Converti in array 2D se necessario
+        if x.ndim == 1:
+            x = x.reshape(1, -1)
+        
+        # Controllo e correzione dimensioni
+        if x.shape[1] != self.output_weights.shape[1]:
+            if x.shape[1] == self.output_weights.shape[1] - 1 and self.use_bias:
+                x = np.column_stack([x, np.ones(x.shape[0])])
+            elif x.shape[1] == self.output_weights.shape[1] + 1 and not self.use_bias:
+                x = x[:, :-1]
+            elif x.shape[1] > self.output_weights.shape[1]:
+                x = x[:, :self.output_weights.shape[1]]
+            else:
+                temp = np.zeros((x.shape[0], self.output_weights.shape[1]))
+                temp[:, :x.shape[1]] = x
+                x = temp
+        
+        # Calcola l'output
+        net = np.dot(self.output_weights, x.T) + self.output_bias.reshape(-1, 1)
+        output = self.activation_function(net)
+        
+        return output.flatten()
+    
+    def _add_hidden_unit(self, X, y):
+        """Aggiunge una nuova unità nascosta"""
+        low, high = self.weight_init_range
+        candidate_weights = np.random.uniform(low, high, self.input_size)
+        
+        if self.use_bias:
+            candidate_bias = np.random.uniform(low, high, 1)
+        else:
+            candidate_bias = np.array([0.0])
+        
+        # Aggiungi il candidato alla lista delle unità nascoste
+        self.hidden_units.append({
+            'weights': candidate_weights,
+            'bias': candidate_bias
+        })
+        
+        # Inizializza i pesi per la nuova connessione
+        hidden_weight = np.random.uniform(low, high, 1)
+        self.hidden_weights.append(hidden_weight)
+    
+    def fit(self, X, y, max_epochs=100, tolerance=1e-4, learning_rate=0.1):
+        """Addestra la rete Cascade Correlation"""
+        self.learning_rate = learning_rate
+        X = np.array(X)
+        y = np.array(y)
+        
+        # Aggiungi bias term ai dati di input se use_bias è True
+        if self.use_bias:
+            X_with_bias = np.column_stack([X, np.ones(X.shape[0])])
+        else:
+            X_with_bias = X
+        
+        # Training dello strato di output iniziale
+        previous_error = float('inf')
+        training_loss = []
+        
+        for epoch in range(max_epochs):
+            total_error = 0
+            
+            for i, x in enumerate(X_with_bias):
+                # Calcola l'output corrente
+                prediction = self._compute_output([x])[0]
+                
+                # Calcola l'errore
+                error = y[i] - prediction
+                total_error += error ** 2
+                
+                # Aggiorna i pesi (regola delta semplice)
+                x_array = np.array(x).flatten()
+                delta = error * self.learning_rate
+                
+                # CORREZIONE: Assicurati che le dimensioni siano compatibili
+                if x_array.shape[0] != self.output_weights.shape[1]:
+                    # Se c'è mismatch, aggiusta x_array
+                    if x_array.shape[0] < self.output_weights.shape[1]:
+                        # Aggiungi zeri
+                        temp = np.zeros(self.output_weights.shape[1])
+                        temp[:x_array.shape[0]] = x_array
+                        x_array = temp
+                    else:
+                        # Tronca
+                        x_array = x_array[:self.output_weights.shape[1]]
+                
+                # CORREZIONE: Assicurati che delta * x_array abbia la stessa dimensione di output_weights
+                update = delta * x_array
+                if update.shape != self.output_weights.shape:
+                    update = update.reshape(self.output_weights.shape)
+                
+                self.output_weights += update
+                
+                if self.use_bias:
+                    self.output_bias += delta
+            
+            mse = total_error / len(y)
+            training_loss.append(mse)
+            
+            # Controllo di convergenza
+            if abs(previous_error - mse) < tolerance:
+                break
+            
+            previous_error = mse
+            
+            # Aggiungi unità nascoste se necessario
+            if (mse > tolerance and 
+                len(self.hidden_units) < self.max_hidden_units and 
+                epoch % 20 == 0 and 
+                epoch > 10):  # Aspetta almeno 10 epoche prima di aggiungere unità
+                self._add_hidden_unit(X_with_bias, y)
+        
+        self.training_history = training_loss
+        return training_loss[-1] if training_loss else float('inf')
+    
     def predict(self, X):
-        preds = []
-        for xi in X:
-            _, outputs = self.forward(xi)
-            preds.append(outputs[0])
-        return np.array(preds)
-
-def calculate_accuracy(mlp, X, y):
-    y_pred = mlp.predict(X)
-    y_pred_class = np.where(y_pred >= 0.5, 1, 0)
-    accuracy = np.mean(y_pred_class == y) * 100
-    return accuracy
+        """Effettua predizioni sui dati"""
+        X = np.array(X)
+        
+        # Aggiungi bias term se use_bias è True
+        if self.use_bias:
+            X_with_bias = np.column_stack([X, np.ones(X.shape[0])])
+        else:
+            X_with_bias = X
+        
+        predictions = []
+        
+        for i, x in enumerate(X_with_bias):
+            current_input = np.array(x).flatten()
+            
+            # Calcola l'output dello strato iniziale
+            output = self._compute_output([current_input])[0]
+            
+            # Aggiungi contributi delle unità nascoste
+            for j, unit in enumerate(self.hidden_units):
+                net = np.dot(unit['weights'], current_input) + unit['bias']
+                hidden_output = self.activation_function(net)
+                output += self.hidden_weights[j] * hidden_output
+            
+            predictions.append(output)
+        
+        return np.array(predictions)
     
-def create_k_folds(X, y, k_folds, random_seed=42):
-    #crea k fold per la cross validation
-    if random_seed is not None:
-        np.random.seed(random_seed)
+    def predict_class(self, X, threshold=0.0):
+        """Predizioni per classificazione binaria"""
+        predictions = self.predict(X)
+        return (predictions > threshold).astype(int)
 
-    n_samples = len(X)
-    indices = np.random.permutation(n_samples)
-    fold_size = n_samples // k_folds
-
-    folds = []
-    for i in range(k_folds):
-        start = i * fold_size
-        end = (i + 1) * fold_size if i < k_folds - 1 else n_samples
-        
-        val_indices = indices[start:end]
-        train_indices = np.concatenate([indices[:start], indices[end:]])
-        
-        X_train_fold = X[train_indices]
-        y_train_fold = y[train_indices]
-        X_val_fold = X[val_indices]
-        y_val_fold = y[val_indices]
-        
-        folds.append((X_train_fold, y_train_fold, X_val_fold, y_val_fold))
+def one_hot_encode_monk(X):
+    """Codifica one-hot per i dati MONK che sono categorici"""
+    encoded_features = []
     
-    return folds
+    for i in range(6):
+        feature = X[:, i]
+        n_values = len(np.unique(feature))
+        one_hot = np.eye(n_values)[feature - 1]
+        encoded_features.append(one_hot)
+    
+    return np.hstack(encoded_features)
 
-def print_grid_search_header(param_grid):
-    """Stampa l'header della grid search"""
+def calculate_accuracy_error(y_true, y_pred):
+    """Calcola accuracy e errore associato"""
+    accuracy = accuracy_score(y_true, y_pred)
+    n = len(y_true)
+    # Errore standard per proporzione binomiale
+    error = 1.96 * np.sqrt((accuracy * (1 - accuracy)) / n)  # 95% confidence interval
+    return accuracy, error
+
+def grid_search_monk1():
+    """Esegue grid search su diverse configurazioni"""
+    # Carica i dati
+    print("Loading MONK-1 data...")
+    X_train, y_train, X_test, y_test = return_monk1()
+    
+    # Converti le label
+    y_train_tanh = 2 * y_train - 1
+    y_test_tanh = 2 * y_test - 1
+    
+    # Codifica one-hot
+    X_train_encoded = one_hot_encode_monk(X_train)
+    X_test_encoded = one_hot_encode_monk(X_test)
+    
+    print(f"Encoded X_train shape: {X_train_encoded.shape}")
+    print(f"Encoded X_test shape: {X_test_encoded.shape}")
+    
+    # Calcola input_size correttamente
+    input_size = X_train_encoded.shape[1]
+    if True:  # use_bias sarà gestito separatamente
+        input_size += 1  # +1 per il bias
+    
+    print(f"Network input size: {input_size}")
+    
+    # Definizione della grid search con hidden units da 3 a 6
+    param_grid = {
+        'max_hidden_units': [3, 4, 5, 6],
+        'use_bias': [True, False],
+        'weight_init_range': [(-0.1, 0.1), (-0.5, 0.5), (-1.0, 1.0)],
+        'learning_rate': [0.01, 0.05, 0.1],
+        'seed': [42, 123, 456]
+    }
+    
+    # Genera tutte le combinazioni
+    keys = param_grid.keys()
+    values = param_grid.values()
+    combinations = [dict(zip(keys, combination)) for combination in itertools.product(*values)]
+    
+    print(f"\nStarting Grid Search with {len(combinations)} configurations...")
+    print("=" * 120)
+    
+    results = []
+    
+    for i, params in enumerate(combinations, 1):
+        # Imposta il seed
+        np.random.seed(params['seed'])
+        
+        # Crea la rete
+        network = CascadeCorrelation(
+            input_size=input_size,
+            activation_function='tanh',
+            weight_init_range=params['weight_init_range'],
+            use_bias=params['use_bias']
+        )
+        
+        network.max_hidden_units = params['max_hidden_units']
+        
+        try:
+            # Addestra la rete
+            start_time = time.time()
+            final_loss = network.fit(
+                X_train_encoded, 
+                y_train_tanh, 
+                max_epochs=100, 
+                tolerance=1e-4,
+                learning_rate=params['learning_rate']
+            )
+            training_time = time.time() - start_time
+            
+            # Predizioni
+            y_pred = network.predict_class(X_test_encoded, threshold=0.0)
+            y_pred_binary = (y_pred > 0).astype(int)
+            y_test_binary = (y_test > 0).astype(int)
+            
+            # Calcola metriche
+            accuracy, accuracy_error = calculate_accuracy_error(y_test_binary, y_pred_binary)
+            
+            # Stampa risultati
+            print(f"Config {i:3d}/{len(combinations)} | "
+                  f"Loss: {final_loss:.6f} | "
+                  f"Accuracy: {accuracy:.4f} ± {accuracy_error:.4f} | "
+                  f"Hidden: {params['max_hidden_units']} | "
+                  f"Bias: {params['use_bias']!s:5} | "
+                  f"Weight Init: [{params['weight_init_range'][0]:.1f}, {params['weight_init_range'][1]:.1f}] | "
+                  f"LR: {params['learning_rate']:.3f} | "
+                  f"Seed: {params['seed']:3d} | "
+                  f"Actual Hidden: {len(network.hidden_units):1d} | "
+                  f"Time: {training_time:.2f}s")
+            
+            results.append({
+                'config_id': i,
+                'final_loss': final_loss,
+                'accuracy': accuracy,
+                'accuracy_error': accuracy_error,
+                'max_hidden_units': params['max_hidden_units'],
+                'use_bias': params['use_bias'],
+                'weight_init_range': params['weight_init_range'],
+                'learning_rate': params['learning_rate'],
+                'seed': params['seed'],
+                'training_time': training_time,
+                'actual_hidden_units': len(network.hidden_units)
+            })
+            
+        except Exception as e:
+            print(f"Config {i:3d}/{len(combinations)} | ERROR: {str(e)}")
+            continue
+    
+    if not results:
+        print("No successful configurations found!")
+        return [], {}
+    
+    # Trova la migliore configurazione
+    best_result = max(results, key=lambda x: x['accuracy'])
+    
+    print("\n" + "=" * 120)
+    print("BEST CONFIGURATION:")
+    print(f"Config {best_result['config_id']} | "
+          f"Loss: {best_result['final_loss']:.6f} | "
+          f"Accuracy: {best_result['accuracy']:.4f} ± {best_result['accuracy_error']:.4f}")
+    print(f"Parameters: Hidden={best_result['max_hidden_units']}, "
+          f"Bias={best_result['use_bias']}, "
+          f"Weight_Init={best_result['weight_init_range']}, "
+          f"LR={best_result['learning_rate']}, "
+          f"Seed={best_result['seed']}")
+    
+    return results, best_result
+
+def analyze_results(results):
+    """Analizza i risultati della grid search"""
+    if not results:
+        print("No results to analyze!")
+        return None
+        
+    results_df = pd.DataFrame(results)
+    
     print("\n" + "=" * 80)
-    print("GRID SEARCH - HYPERPARAMETER TUNING")
+    print("ANALYSIS BY PARAMETER:")
     print("=" * 80)
     
-    for param_name, param_values in param_grid.items():
-        print(f"Hyperparameter '{param_name}': {param_values}")
+    # Analisi per numero di hidden units
+    print("\n1. PERFORMANCE BY HIDDEN UNITS:")
+    hidden_stats = results_df.groupby('max_hidden_units').agg({
+        'accuracy': ['mean', 'std', 'max'],
+        'final_loss': ['mean', 'min']
+    }).round(4)
+    print(hidden_stats)
     
-    print("=" * 80)
+    # Analisi per bias
+    print("\n2. PERFORMANCE BY BIAS USAGE:")
+    bias_stats = results_df.groupby('use_bias').agg({
+        'accuracy': ['mean', 'std', 'max'],
+        'final_loss': ['mean', 'min']
+    }).round(4)
+    print(bias_stats)
+    
+    # Analisi per learning rate
+    print("\n3. PERFORMANCE BY LEARNING RATE:")
+    lr_stats = results_df.groupby('learning_rate').agg({
+        'accuracy': ['mean', 'std', 'max'],
+        'final_loss': ['mean', 'min']
+    }).round(4)
+    print(lr_stats)
+    
+    # Top 5 configurazioni
+    print("\n4. TOP 5 CONFIGURATIONS:")
+    top_5 = results_df.nlargest(5, 'accuracy')[[
+        'config_id', 'accuracy', 'accuracy_error', 'final_loss', 
+        'max_hidden_units', 'use_bias', 'learning_rate', 'seed'
+    ]]
+    print(top_5.to_string(index=False))
+    
+    return results_df
 
-def print_accuracy_grid(results_matrix, hidden_neurons, learning_rates, fixed_params):
-    """Stampa la griglia delle accuracy in formato tabellare"""
-    print(f"\nGRID SEARCH RESULTS (Accuracy %)")
-    print(f"Fixed parameters: {fixed_params}")
-    print("-" * 60)
+def main():
+    # Esegui grid search
+    print("MONK-1 Cascade Correlation Grid Search")
+    print("Hidden Units: 3 to 6")
+    results, best_result = grid_search_monk1()
     
-    # Header colonne (learning rates)
-    header = "Hidden \\ Eta | " + " | ".join([f"{eta:5.2f}" for eta in learning_rates])
-    print(header)
-    print("-" * len(header))
-    
-    # Righe (hidden neurons)
-    for i, hidden in enumerate(hidden_neurons):
-        row = f"    {hidden:2d}     | " + " | ".join([f"{results_matrix[i][j]:5.1f}%" for j in range(len(learning_rates))])
-        print(row)
-    
-    print("-" * len(header))
-
-def grid_search_mlp(X_train, y_train, param_grid, k_folds=3, random_seed=42):
-    num_inputs = X_train.shape[1]
-    best_params = None
-    best_accuracy = 0
-    all_results = []
-    
-    print_grid_search_header(param_grid)
-
-    # Per stampare la griglia, assumiamo che stiamo facendo una ricerca 2D
-    # (ad esempio hidden_neurons vs learning_rate con epochs fisso)
-    if 'num_hidden' in param_grid and 'eta' in param_grid:
-        hidden_neurons = param_grid['num_hidden']
-        learning_rates = param_grid['eta']
-        epochs_value = param_grid['epochs'][0] if 'epochs' in param_grid else 700
-        
-        # Matrice per i risultati
-        results_matrix = np.zeros((len(hidden_neurons), len(learning_rates)))
-        
-        print(f"\nTesting {len(hidden_neurons)}x{len(learning_rates)} = {len(hidden_neurons)*len(learning_rates)} combinations...")
-    
-    # Genera tutte le combinazioni di parametri
-    param_names = list(param_grid.keys())
-    param_values = list(param_grid.values())
-    param_combinations = list(itertools.product(*param_values))
-
-    print(f"Grid Search: testing {len(param_combinations)} combinations with {k_folds}-fold CV")
-    print("=" * 70)
-    
-    for i, combo in enumerate(param_combinations):
-        params = dict(zip(param_names, combo))
-        print(f"Testing combination {i+1}/{len(param_combinations)}: {params}")
-        
-        fold_accuracies = []
-        
-        # Crea i fold per cross-validation
-        folds = create_k_folds(X_train, y_train, k_folds, random_seed)
-        
-        for fold_idx, (X_train_fold, y_train_fold, X_val_fold, y_val_fold) in enumerate(folds):
-            np.random.seed(random_seed + fold_idx) 
-            # Crea e allena il modello con i parametri correnti
-            mlp = MultiLayerPerceptron(num_inputs=num_inputs, num_hidden=params['num_hidden'], num_outputs=1, eta=params['eta'])
-            
-            mlp.fit(X_train_fold, y_train_fold, epochs=params['epochs'])
-            
-            # Calcola accuracy sul validation set
-            val_accuracy =calculate_accuracy(mlp, X_val_fold, y_val_fold)
-            fold_accuracies.append(val_accuracy)
-        
-        # Calcola media e deviazione standard delle accuracy
-        mean_accuracy = np.mean(fold_accuracies)
-        std_accuracy = np.std(fold_accuracies)
+    if results:
+        # Analizza i risultati
+        results_df = analyze_results(results)
         
         # Salva i risultati
-        result = {
-            'params': params.copy(),
-            'mean_accuracy': mean_accuracy,
-            'std_accuracy': std_accuracy,
-            'fold_accuracies': fold_accuracies
-        }
-        all_results.append(result)
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        filename = f"monk1_grid_search_results_{timestamp}.csv"
+        results_df.to_csv(filename, index=False)
+        print(f"\nResults saved to: {filename}")
         
-        # Aggiorna la matrice per la visualizzazione a griglia
-        if 'num_hidden' in param_grid and 'eta' in param_grid:
-            hidden_idx = hidden_neurons.index(params['num_hidden'])
-            eta_idx = learning_rates.index(params['eta'])
-            results_matrix[hidden_idx][eta_idx] = mean_accuracy
-        
-        # Aggiorna i migliori parametri
-        if mean_accuracy > best_accuracy:
-            best_accuracy = mean_accuracy
-            best_params = params.copy()
-    
-    # Stampa la griglia dei risultati
-    if 'num_hidden' in param_grid and 'eta' in param_grid:
-        fixed_params = {'epochs': epochs_value}
-        print_accuracy_grid(results_matrix, hidden_neurons, learning_rates, fixed_params)
-    
-    print("=" * 80)
-    print(f"Best parameters: {best_params}")
-    print(f"Best CV accuracy: {best_accuracy:.2f}%")
-    
-    return best_params, best_accuracy, all_results
-
-def print_top_results(all_results, top_k=5):
-    print(f"\nTop {top_k} parameter combinations:")
-    print("-" * 60)
-    
-    # Ordina i risultati per accuracy discendente
-    sorted_results = sorted(all_results, key=lambda x: x['mean_accuracy'], reverse=True)
-    
-    for i, result in enumerate(sorted_results[:top_k]):
-        params = result['params']
-        mean_acc = result['mean_accuracy']
-        std_acc = result['std_accuracy']
-        print(f"{i+1}. Accuracy: {mean_acc:.2f}% (+/- {std_acc:.2f}%)")
-        print(f"   Parameters: {params}")
-        print()
-
-# === MAIN EXECUTION ===
-def main():
-    # Carica i dati
-    X_train, y_train, X_test, y_test = return_monk1()
-
-    # Definisci la grid degli hyperparameters
-    param_grid = {'num_hidden': [2, 4, 6, 8],'eta': [0.1, 0.2, 0.3, 0.5],'epochs': [500, 700, 1000]}
-    
-    # Esegui grid search
-    print("Starting Grid Search for Hyperparameter Tuning...")
-    best_params, best_accuracy, all_results = grid_search_mlp(X_train, y_train, param_grid, k_folds=3, random_seed=42)
-    
-    # Mostra i migliori risultati
-    print_top_results(all_results, top_k=5)
-    
-     #alleno il modello finale con i migliori parametri
-    print("Training final model with best parameters...")
-    np.random.seed(42)
-    final_mlp = MultiLayerPerceptron(num_inputs=X_train.shape[1], num_hidden=best_params['num_hidden'], num_outputs=1, eta=best_params['eta'])
-
-    final_mlp.fit(X_train, y_train, epochs = best_params['epochs'])
-
-    # Valutazione finale
-    y_pred_train = final_mlp.predict(X_train)
-    y_pred_train_class = np.where(y_pred_train >= 0.5, 1, 0)
-    train_accuracy = np.mean(y_pred_train_class == y_train) * 100
-    
-    y_pred_test = final_mlp.predict(X_test)
-    y_pred_test_class = np.where(y_pred_test >= 0.5, 1, 0)
-    test_accuracy = np.mean(y_pred_test_class == y_test) * 100
-    
-    print(f"\n=== FINAL RESULTS ===")
-    print(f"Best parameters: {best_params}")
-    print(f"Training Accuracy: {train_accuracy:.2f}%")
-    print(f"Test Accuracy: {test_accuracy:.2f}%")
+        return results_df, best_result
+    else:
+        print("No results to return!")
+        return None, None
 
 if __name__ == "__main__":
-        main()
-    
+    results_df, best_result = main()

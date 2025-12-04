@@ -12,9 +12,15 @@ class NeuralNetwork:
         self.loss_history = {"training": [], "test": []}
 
         self.layers = []
-        self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, activation_function_type="tanh", is_output_neuron=False) for j in range(network_structure[0])])
+        self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
+                activation_function_type="tanh", is_output_neuron=False) 
+                for j in range(network_structure[0])])
+        
         for i in range(len(network_structure) - 1):
-            self.layers.append([neuron.Neuron(num_inputs=network_structure[i], index_in_layer=j, activation_function_type="tanh", is_output_neuron=(i==len(network_structure)-2)) for j in range(network_structure[i + 1])])
+            self.layers.append([neuron.Neuron(num_inputs=network_structure[i], 
+                        index_in_layer=j, activation_function_type="tanh", 
+                        is_output_neuron=(i==len(network_structure)-2)) 
+                        for j in range(network_structure[i + 1])])
 
         for l in range(len(self.layers) - 1):
             for n in self.layers[l]:
@@ -52,7 +58,7 @@ class NeuralNetwork:
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
-    def fit(self, X, X_test, y, y_test, epochs=1000):
+    def fit(self, X, X_test, y, y_test, epochs=1000, verbose=True):
         X = np.array(X, dtype=float)
         y = np.array(y, dtype=float)
 

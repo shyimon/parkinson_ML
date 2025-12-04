@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-12-04 10:01:03",
+  "best_params": {
+    "learning_rate": 0.05,
+    "hidden_neurons": 6,
+    "epochs": 400,
+    "cv_seed": 42
+  },
+  "cv_accuracy": 95.83333333333333,
+  "cv_std": 8.333333333333337,
+  "search_type": "dichotomic",
+  "parameter_ranges": {
+    "learning_rate": [
+      0.01,
+      0.05,
+      0.1,
+      0.15,
+      0.2,
+      0.25
+    ],
+    "hidden_neurons": [
+      2,
+      4,
+      6,
+      8,
+      10,
+      12,
+      14
+    ],
+    "epochs": [
+      100,
+      200,
+      300,
+      400,
+      500
+    ]
+  }
+}

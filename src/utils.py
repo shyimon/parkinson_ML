@@ -1,3 +1,6 @@
+import os
+graphviz_path = r"C:\Graphviz\bin"
+os.environ["PATH"] = graphviz_path + os.pathsep + os.environ["PATH"]
 from graphviz import Digraph
 
 # A method to render and save a graphical representation of the nerwork passed using the graphviz library
