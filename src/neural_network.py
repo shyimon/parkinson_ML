@@ -10,15 +10,16 @@ class NeuralNetwork:
     def __init__(self, network_structure, eta=0.1):
         self.eta = eta
         self.loss_history = {"training": [], "test": []}
+        self.loss_type = "half_mse"
 
         self.layers = []
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
-                activation_function_type="tanh", is_output_neuron=False) 
+                activation_function_type="sigmoid", is_output_neuron=False) 
                 for j in range(network_structure[0])])
         
         for i in range(len(network_structure) - 1):
             self.layers.append([neuron.Neuron(num_inputs=network_structure[i], 
-                        index_in_layer=j, activation_function_type="tanh", 
+                        index_in_layer=j, activation_function_type="sigmoid", 
                         is_output_neuron=(i==len(network_structure)-2)) 
                         for j in range(network_structure[i + 1])])
 
@@ -68,7 +69,7 @@ class NeuralNetwork:
             for xi, yi in zip(X, y):
                 outputs = self.forward(xi)
                 y_pred = outputs[0]
-                total_loss += self.compute_loss(yi, y_pred, loss_type="half_mse")
+                total_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
 
                 self.backward(yi)
 
@@ -76,7 +77,7 @@ class NeuralNetwork:
             self.loss_history["training"].append(avg_loss)
 
             y_pred_test = self.predict(X_test)
-            test_loss = np.sum(self.compute_loss(y_test, y_pred_test.flatten(), loss_type="half_mse"))
+            test_loss = np.sum(self.compute_loss(y_test, y_pred_test.flatten(), loss_type=self.loss_type))
             avg_test_loss = test_loss / len(y_test)
             self.loss_history["test"].append(avg_test_loss)
             if epoch % 25 == 0:

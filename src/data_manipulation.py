@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Monk datasets are returned separately and splitted into training, test, parameters and targets
-def return_monk1(dataset_shuffle=True):
+def return_monk1(dataset_shuffle=True, one_hot=False):
     monk1_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
     monk1_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
@@ -13,6 +13,10 @@ def return_monk1(dataset_shuffle=True):
         monk1_train = monk1_train.sample(frac=1).reset_index(drop=True)
         monk1_test = monk1_test.sample(frac=1).reset_index(drop=True)
 
+    if one_hot:
+        monk1_train = pd.get_dummies(monk1_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+        monk1_test = pd.get_dummies(monk1_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+
     monk1_train_X = monk1_train.drop(columns=['class', 'id']).to_numpy()
     monk1_train_y = monk1_train['class'].to_numpy()
     monk1_test_X = monk1_test.drop(columns=['class', 'id']).to_numpy()
@@ -21,7 +25,7 @@ def return_monk1(dataset_shuffle=True):
     return monk1_train_X, monk1_train_y, monk1_test_X, monk1_test_y
 
 
-def return_monk2(dataset_shuffle=True):
+def return_monk2(dataset_shuffle=True, one_hot=False):
     monk2_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.train'
     monk2_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
@@ -33,6 +37,10 @@ def return_monk2(dataset_shuffle=True):
         monk2_train = monk2_train.sample(frac=1).reset_index(drop=True)
         monk2_test = monk2_test.sample(frac=1).reset_index(drop=True)
 
+    if one_hot:
+        monk2_train = pd.get_dummies(monk2_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+        monk2_test = pd.get_dummies(monk2_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+
     monk2_train_X = monk2_train.drop(columns=['class', 'id']).to_numpy()
     monk2_train_y = monk2_train['class'].to_numpy()
     monk2_test_X = monk2_test.drop(columns=['class', 'id']).to_numpy()
@@ -41,7 +49,7 @@ def return_monk2(dataset_shuffle=True):
     return monk2_train_X, monk2_train_y, monk2_test_X, monk2_test_y
 
 
-def return_monk3(dataset_shuffle=True):
+def return_monk3(dataset_shuffle=True, one_hot=False):
     monk3_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.train'
     monk3_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
@@ -53,6 +61,10 @@ def return_monk3(dataset_shuffle=True):
         monk3_train = monk3_train.sample(frac=1).reset_index(drop=True)
         monk3_test = monk3_test.sample(frac=1).reset_index(drop=True)
 
+    if one_hot:
+        monk3_train = pd.get_dummies(monk3_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+        monk3_test = pd.get_dummies(monk3_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+        
     monk3_train_X = monk3_train.drop(columns=['class', 'id']).to_numpy()
     monk3_train_y = monk3_train['class'].to_numpy()
     monk3_test_X = monk3_test.drop(columns=['class', 'id']).to_numpy()
