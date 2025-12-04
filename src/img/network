@@ -1,0 +1,51 @@
+digraph {
+	rankdir=LR ranksep=3 splines=line
+	subgraph cluster_0 {
+		label="Input Layer"
+		"0_0" [fillcolor=lightgray shape=circle style=filled]
+		"0_1" [fillcolor=lightgray shape=circle style=filled]
+		"0_2" [fillcolor=lightgray shape=circle style=filled]
+		"0_3" [fillcolor=lightgray shape=circle style=filled]
+		"0_4" [fillcolor=lightgray shape=circle style=filled]
+		"0_5" [fillcolor=lightgray shape=circle style=filled]
+	}
+	subgraph cluster_1 {
+		label="Layer 1"
+		"1_0" [fillcolor=lightgray shape=circle style=filled]
+		"1_1" [fillcolor=lightgray shape=circle style=filled]
+		"1_2" [fillcolor=lightgray shape=circle style=filled]
+		"1_3" [fillcolor=lightgray shape=circle style=filled]
+	}
+	subgraph cluster_2 {
+		label="Output Layer"
+		"2_0" [fillcolor=lightgray shape=circle style=filled]
+	}
+	"0_0" -> "1_0" [color=red labelangle=0 labeldistance=7 penwidth=0.37257469840997626 taillabel=-2.372]
+	"0_1" -> "1_0" [color=red labelangle=0 labeldistance=7 penwidth=1.8466014548686105 taillabel=2.350]
+	"0_2" -> "1_0" [color=red labelangle=0 labeldistance=7 penwidth=1.1090527846309053 taillabel=-0.013]
+	"0_3" -> "1_0" [color=red labelangle=0 labeldistance=7 penwidth=1.0973266286530217 taillabel=-0.051]
+	"0_4" -> "1_0" [color=red labelangle=0 labeldistance=7 penwidth=1.1607211043054286 taillabel=0.152]
+	"0_5" -> "1_0" [color=red labelangle=0 labeldistance=7 penwidth=1.105513959010486 taillabel=-0.024]
+	"0_0" -> "1_1" [color=red labelangle=0 labeldistance=7 penwidth=1.004593779667186 taillabel=-0.348]
+	"0_1" -> "1_1" [color=red labelangle=0 labeldistance=7 penwidth=1.1534020176798239 taillabel=0.129]
+	"0_2" -> "1_1" [color=red labelangle=0 labeldistance=7 penwidth=0.9559741148751473 taillabel=-0.504]
+	"0_3" -> "1_1" [color=red labelangle=0 labeldistance=7 penwidth=0.9844940855877691 taillabel=-0.412]
+	"0_4" -> "1_1" [color=red labelangle=0 labeldistance=7 penwidth=1.121033696936116 taillabel=0.025]
+	"0_5" -> "1_1" [color=red labelangle=0 labeldistance=7 penwidth=1.2277422153954376 taillabel=0.367]
+	"0_0" -> "1_2" [color=red labelangle=0 labeldistance=7 penwidth=0.23832747096581733 taillabel=-2.802]
+	"0_1" -> "1_2" [color=red labelangle=0 labeldistance=7 penwidth=2.0 taillabel=2.841]
+	"0_2" -> "1_2" [color=red labelangle=0 labeldistance=7 penwidth=1.1153693331073316 taillabel=0.007]
+	"0_3" -> "1_2" [color=red labelangle=0 labeldistance=7 penwidth=1.112339356691356 taillabel=-0.003]
+	"0_4" -> "1_2" [color=red labelangle=0 labeldistance=7 penwidth=1.0778852281171847 taillabel=-0.113]
+	"0_5" -> "1_2" [color=red labelangle=0 labeldistance=7 penwidth=1.0954185380942771 taillabel=-0.057]
+	"0_0" -> "1_3" [color=red labelangle=0 labeldistance=7 penwidth=1.1946427632517573 taillabel=0.261]
+	"0_1" -> "1_3" [color=red labelangle=0 labeldistance=7 penwidth=1.1459998659388901 taillabel=0.105]
+	"0_2" -> "1_3" [color=red labelangle=0 labeldistance=7 penwidth=1.0815641191795855 taillabel=-0.101]
+	"0_3" -> "1_3" [color=red labelangle=0 labeldistance=7 penwidth=1.0948196556788548 taillabel=-0.059]
+	"0_4" -> "1_3" [color=red labelangle=0 labeldistance=7 penwidth=0.1 taillabel=-3.246]
+	"0_5" -> "1_3" [color=red labelangle=0 labeldistance=7 penwidth=1.1289304522641048 taillabel=0.051]
+	"1_0" -> "2_0" [color=red labelangle=0 labeldistance=7 penwidth=1.7437399556299396 taillabel=2.020]
+	"1_1" -> "2_0" [color=red labelangle=0 labeldistance=7 penwidth=1.1090483933377082 taillabel=-0.013]
+	"1_2" -> "2_0" [color=red labelangle=0 labeldistance=7 penwidth=0.4954083460154498 taillabel=-1.979]
+	"1_3" -> "2_0" [color=red labelangle=0 labeldistance=7 penwidth=1.6175721142091553 taillabel=1.616]
+}
