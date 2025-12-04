@@ -32,6 +32,6 @@ class CascadeNetwork:
     def forward(self, input_pattern):
         outputs = []
         for n in self.output_neurons:
-            out = n.feed_neuron(input_pattern)
-        outputs.append(out)
+            out = nrn.feed_neuron(input_pattern)
+            outputs.append(out)
         return np.array(outputs)
