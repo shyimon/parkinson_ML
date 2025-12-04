@@ -17,8 +17,8 @@ class SimpleGridSearchCV:
         self.best_fold_accuracies = []
         
         self.lr_range = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25]
-        self.hidden_range = [2, 4, 6, 8, 10, 12, 14]
-        self.epochs_range = [100, 200, 300, 400, 500]
+        self.hidden_range = [2, 3, 4, 6, 8]
+        self.epochs_range = [300, 400, 500]
     
     def _create_folds(self, X, y, seed=42):
 
@@ -177,7 +177,7 @@ class SimpleGridSearchCV:
        # Ricerca dicotomica per i parametri principali
        
         print("\n" + "="*60)
-        print("RICERCA DICOTOMICA DEI PARAMETTI")
+        print("RICERCA DICOTOMICA DEI PARAMETRI")
         print("="*60)
         
         input_size = X.shape[1]
