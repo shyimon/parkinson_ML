@@ -29,4 +29,9 @@ class CascadeNetwork:
         # e sarà l'algoritmo in modo autonomo a decidere se e quanti aggiungerne
         self.hidden_units = []
 
- 
+    def forward(self, input_pattern):
+        outputs = []
+        for n in self.output_neurons:
+            out = n.feed_neuron(input_pattern)
+        outputs.append(out)
+        return np.array(outputs)
