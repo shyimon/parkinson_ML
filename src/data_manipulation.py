@@ -29,11 +29,8 @@ def return_monk1(dataset_shuffle=False, one_hot=False):
                 monk1_test[col] = 0
 
         # riordino
-        train_dummies = train_dummies[all_columns]
-        test_dummies = test_dummies[all_columns]
-
-        monk1_train = train_dummies
-        monk1_test = test_dummies
+        monk1_train = monk1_train[all_columns]
+        monk1_test = monk1_test[all_columns]
 
     monk1_train_X = monk1_train.drop(columns=['class', 'id']).to_numpy()
     monk1_train_y = monk1_train['class'].to_numpy()
