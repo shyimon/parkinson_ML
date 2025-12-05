@@ -1,7 +1,8 @@
 import pandas as pd
 
 # Monk datasets are returned separately and splitted into training, test, parameters and targets
-def return_monk1(dataset_shuffle=True, one_hot=False):
+# ho messo dataset_shuffle=false
+def return_monk1(dataset_shuffle=False, one_hot=False):
     monk1_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
     monk1_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
@@ -9,13 +10,30 @@ def return_monk1(dataset_shuffle=True, one_hot=False):
     monk1_train = pd.read_csv(monk1_train_url, header=None, names=column_names, sep="\\s+")
     monk1_test = pd.read_csv(monk1_test_url, header=None, names=column_names, sep="\\s+")
 
+    #ho sistemato per assicurarmi che le colonne tra train set e test set siano ben allineate
     if dataset_shuffle:
         monk1_train = monk1_train.sample(frac=1).reset_index(drop=True)
         monk1_test = monk1_test.sample(frac=1).reset_index(drop=True)
 
     if one_hot:
-        monk1_train = pd.get_dummies(monk1_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
-        monk1_test = pd.get_dummies(monk1_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+        categorical_cols = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
+        monk1_train = pd.get_dummies(monk1_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], dtype=int)
+        monk1_test = pd.get_dummies(monk1_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], dtype=int)
+
+        #allineo le colonne
+        all_columns = sorted(set(monk1_train.columns).union(set(monk1_test.columns)))
+        for col in all_columns:
+            if col not in monk1_train.columns:
+                monk1_train[col] = 0
+            if col not in monk1_test.columns:
+                monk1_test[col] = 0
+
+        # riordino
+        train_dummies = train_dummies[all_columns]
+        test_dummies = test_dummies[all_columns]
+
+        monk1_train = train_dummies
+        monk1_test = test_dummies
 
     monk1_train_X = monk1_train.drop(columns=['class', 'id']).to_numpy()
     monk1_train_y = monk1_train['class'].to_numpy()

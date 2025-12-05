@@ -3,7 +3,7 @@ import time
 import os
 import json
 
-class SimpleGridSearchCV:
+class GridSearch:
     def __init__(self, cv_folds=5, verbose=True, results_dir='grid_search_results'):
         self.cv_folds = cv_folds
         self.verbose = verbose
@@ -29,16 +29,34 @@ class SimpleGridSearchCV:
         rng = np.random.RandomState(seed)
         rng.shuffle(indices)
         
+        #calcola dimensione di ogni fold
         fold_size = n_samples // self.cv_folds
+
+        #calcola i samples rimanenti
+        extra_samples = n_samples % self.cv_folds
+
         folds = []
+        current_start = 0
         
+        #la riga end = start + fold size if i< self.cv_folds - 1 else n_samples, mette 
+        # i rimanenti fold della divisione intera nell'ultimo fold, così l'ultimo fold è 
+        # più grande degli altri. Ho fatto un cambiamento per distribuire i samples rimanenti
+        # dalla divisione intera tra i vari fold, così i fold hanno un numero di samples
+        # più bilanciato
         for i in range(self.cv_folds):
-            start = i * fold_size
-            end = start + fold_size if i < self.cv_folds - 1 else n_samples
+            # Questo fold avrà dimensione fold_size + (1 se i < extra_samples)
+            current_fold_size = fold_size + (1 if i < extra_samples else 0)
+
+            start = current_start
+            end = current_start + fold_size
+
             val_indices = indices[start:end]
             train_indices = np.concatenate([indices[:start], indices[end:]])
             folds.append((train_indices, val_indices))
-        
+                
+            # aggiorna il prossimo fold
+            current_start = end
+
         return folds
     
     def _binary_search(self, param_name, values, base_params, X, y):
@@ -53,13 +71,13 @@ class SimpleGridSearchCV:
         
         while low <= high:
             mid = (low + high) // 2
-            
+
             # Testa il valore centrale
             test_params = base_params.copy()
             test_params[param_name] = values[mid]
             mid_acc, mid_std = self._evaluate_single_params(test_params, X, y)
             acc_history.append((values[mid], mid_acc, mid_std))
-            
+
             # Testa valori adiacenti se esistono
             if mid > low:
                 test_params_low = base_params.copy()
@@ -96,9 +114,6 @@ class SimpleGridSearchCV:
                     best_acc = high_acc
                     best_std = high_std
         
-        if self.verbose:
-            print(f"  {param_name}: {best_value} (Acc: {best_acc:.2f}% ± {best_std:.2f}%)")
-        
         return best_value, best_acc, best_std
     
     def _evaluate_single_params(self, params, X, y):
@@ -106,6 +121,13 @@ class SimpleGridSearchCV:
         
         # Calcola input size
         input_size = X.shape[1]
+
+        if self.verbose:
+            print(f"\n    Valutazione parametri:")
+            print(f"      Learning rate: {params['learning_rate']}")
+            print(f"      Hidden neurons: {params['hidden_neurons']}")
+            print(f"      Epochs: {params['epochs']}")
+            print(f"      Seed: {params.get('cv_seed', 42)}")
         
         # Crea fold
         folds = self._create_folds(X, y, seed=params.get('cv_seed', 42))
@@ -136,7 +158,12 @@ class SimpleGridSearchCV:
                 accuracies.append(0.0)
         
         if accuracies:
-            return np.mean(accuracies), np.std(accuracies)
+            mean_acc = np.mean(accuracies)
+            std_acc = np.std(accuracies)
+            if self.verbose:
+                print(f"    Media: {mean_acc:.2f}%, Deviazione: ±{std_acc:.2f}%")
+            return mean_acc, std_acc
+        
         return 0.0, 0.0
     
     def _train_single_model(self, X_train, y_train, X_val, y_val, params, input_size):
@@ -274,3 +301,4 @@ class SimpleGridSearchCV:
             json.dump(data_to_save, f, indent=2)
         
         print(f"\n Risultati salvati in: {filepath}")
+
