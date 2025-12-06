@@ -6,8 +6,9 @@ from data_manipulation import return_monk1
 from grid_search_cv import GridSearch
 
 def main():
+    num_trials = 500
     print("="*70)
-    print("GRID SEARCH + 50 TRIAL SU MONK1")
+    print(f"GRID SEARCH + {num_trials} TRIAL SU MONK1")
     print("="*70)
     
     print("\n[1] Caricamento dataset MONK1...")
@@ -28,28 +29,27 @@ def main():
     # Esegui ricerca
     best_params, cv_acc, cv_std = gs._dichotomic_search(
         X_train, y_train,
-        max_iteration=3,
-        n_points=3
+        max_iteration=4,
+        n_points=5
     )
     
-    print("\n[3] 50 Trial con parametri ottimali...")
+    print(f"\n[3] {num_trials} Trial con parametri ottimali...")
     print("-"*70)
     
     import neural_network as nn
     
-    n_trials = 50
     accuracies = []
     
-    print(f"Parametri usati per {n_trials} trial:")
+    print(f"Parametri usati per {num_trials} trial:")
     for param, value in best_params.items():
         print(f"  {param}: {value}")
     
-    print(f"\nInizio {n_trials} addestramenti...")
+    print(f"\nInizio {num_trials} addestramenti...")
     start_time = time.time()
     
-    for i in range(n_trials):
+    for i in range(num_trials):
         if (i + 1) % 5 == 0:
-            print(f"  Trial {i+1}/{n_trials}...")
+            print(f"  Trial {i+1}/{num_trials}...")
         
         # Crea rete con struttura dai parametri ottimali
         input_size = X_train.shape[1]
@@ -86,11 +86,10 @@ def main():
     # 4. Calcola statistiche
     mean_acc = np.mean(accuracies)
     std_acc = np.std(accuracies)
-    median_acc = np.median(accuracies)
     min_acc = np.min(accuracies)
     max_acc = np.max(accuracies)
     
-    print(f"\n[4] Statistiche su {n_trials} trial:")
+    print(f"\n[4] Statistiche su {num_trials} trial:")
     print("-"*70)
     print(f"Tempo totale: {elapsed_time:.1f} secondi")
     print(f"\nAccuracy media: {mean_acc:.2f}%")
@@ -103,7 +102,7 @@ def main():
     print("="*70)
     print(f"Parametri ottimali: lr={best_params['learning_rate']:.3f}, "
           f"hidden={best_params['hidden_neurons']}, epochs={best_params['epochs']}")
-    print(f"\nAccuracy su 50 trial: {mean_acc:.2f}% ± {std_acc:.2f}%")
+    print(f"\nAccuracy su {num_trials} trials: {mean_acc:.2f}% ± {std_acc:.2f}%")
     print(f"Range: {mean_acc - std_acc:.2f}% - {mean_acc + std_acc:.2f}%")
     
 
