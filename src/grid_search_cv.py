@@ -48,7 +48,7 @@ class GridSearch:
             # Questo fold avrà dimensione fold_size + (1 se i < extra_samples)
             current_fold_size = fold_size + (1 if i < extra_samples else 0)
             start = current_start
-            end = current_start + fold_size
+            end = current_start + current_fold_size
 
             val_indices = indices[start:end]
             train_indices = np.concatenate([indices[:start], indices[end:]])
@@ -58,6 +58,29 @@ class GridSearch:
             current_start = end
 
         return folds
+    
+    def _train_single_model(self, X_train, y_train, X_val, y_val, params):
+        import neural_network as nn
+
+        input_size = X_train.shape[1]
+        structure = [input_size, params['hidden_neurons'], 1]
+        net = nn.NeuralNetwork(structure, eta=params['learning_rate'])
+
+        # Inizializzazione Xavier per tanh
+        for layer_idx, layer in enumerate(net.layers):
+            if layer_idx == 0:
+                continue
+            for neuron in layer:
+                n_inputs = len(neuron.weights)
+                if n_inputs > 0:
+                    limit = np.sqrt(6.0 / (n_inputs + 1))
+                    neuron.weights = np.random.uniform(-limit, limit, n_inputs)
+                neuron.bias = 0.0
+
+        net.fit(X_train, X_val, y_train, y_val, epochs=params['epochs'])
+        predictions = net.predict(X_val)
+        pred_classes = (predictions >= 0.5).astype(int)
+        return np.mean(pred_classes == y_val) * 100    
     
     def _evaluate_params(self, params, X, y):
         folds = self._create_folds(X, y, seed=params.get('cv_seed', 42))
@@ -87,29 +110,6 @@ class GridSearch:
         
         return 0.0, 0.0
     
-    def _train_single_model(self, X_train, y_train, X_val, y_val, params):
-        import neural_network as nn
-
-        input_size = X_train.shape[1]
-        structure = [input_size, params['hidden_neurons'], 1]
-        net = nn.NeuralNetwork(structure, eta=params['learning_rate'])
-
-        # Inizializzazione Xavier per tanh
-        for layer_idx, layer in enumerate(net.layers):
-            if layer_idx == 0:
-                continue
-            for neuron in layer:
-                n_inputs = len(neuron.weights)
-                if n_inputs > 0:
-                    limit = np.sqrt(6.0 / (n_inputs + 1))
-                    neuron.weights = np.random.uniform(-limit, limit, n_inputs)
-                neuron.bias = 0.0
-        
-        net.fit(X_train, X_val, y_train, y_val, epochs=params['epochs'])
-        predictions = net.predict(X_val)
-        pred_classes = (predictions >= 0.5).astype(int)
-        return np.mean(pred_classes == y_val) * 100
-    
     def _grid_points(self, ranges_dict, n_points=3):
         # genero punti della griglia uniformemente distribuiti nei range
         grid_points = []
@@ -135,6 +135,62 @@ class GridSearch:
         
         return grid_points
     
+    def _local_refinement(self, X, y, best_params, radius=0.1, n_points=5):
+        #fase di raffinamento locale attorno ai parametri migliori
+        print(f"\nRaffinamento attorno a:")
+        for param, value in best_params.items():
+            if param != 'cv_seed':
+                print(f"{param}: {value}")
+        refined_ranges = {}
+
+        # definisco range ristretti attorno ai migliori parametri
+        for param, value in best_params.items():
+            if param == 'cv_seed':
+                continue
+
+            if param == 'learning_rate':
+                min_val = max(value * (1 - radius), 0.001)
+                max_val = min(value * (1 + radius), 1.0)
+            elif param == 'hidden_neurons':
+                min_val = max(value - 2, 1)
+                max_val = value + 2
+            elif param == 'epochs':
+                min_val = max(value - 50, 100)
+                max_val = value + 50
+            else:
+                min_val = value * 0.9
+                max_val = value * 1.1
+            
+            refined_ranges[param] = (min_val, max_val)
+        
+         # Crea griglia fine
+        grid_points = self._grid_points(refined_ranges, n_points)
+        print(f"Punti di raffinamento: {len(grid_points)}")
+        
+        # Valuta tutti i punti
+        best_refined = {'params': None, 'mean': -np.inf, 'std': 0}
+        
+        for i, params in enumerate(grid_points):
+            params['cv_seed'] = 99  # Seed fisso per raffinamento
+            if self.verbose:
+                print(f"\nRaffinamento [{i+1}/{len(grid_points)}] ", end="")
+            
+            mean_acc, std_acc = self._evaluate_params(params, X, y)
+            
+            self.results.append({
+                'params': params.copy(),
+                'mean_accuracy': mean_acc,
+                'std_accuracy': std_acc,
+                'iteration': 'refinement'
+            })
+            
+            if mean_acc > best_refined['mean']:
+                best_refined = {'params': params.copy(), 'mean': mean_acc, 'std': std_acc}
+                if self.verbose:
+                    print(f"→ Migliore! ({mean_acc:.2f}%)")
+        
+        return best_refined['params'], best_refined['mean'], best_refined['std']
+
     def _dichotomic_search(self, X, y, max_iteration=3, n_points=3):
 
         print("\n" + "="*60)
@@ -159,7 +215,7 @@ class GridSearch:
 
             print(f"Range attuali:")
             for param, (min_val, max_val) in current_ranges.items():
-                print(f"  {param}: [{min_val}, {max_val}]")
+                print(f"  {param}: [{min_val:.4f}, {max_val:.4f}]")
 
             # Genera punti della griglia
             grid_points = self._grid_points(current_ranges, n_points)
@@ -169,49 +225,54 @@ class GridSearch:
             iteration_best = {'params': None, 'mean': -np.inf, 'std': 0}
 
             for i, params in enumerate(grid_points):
-                params['cv_seed'] = 42
+                #seed diverso per ogni iterazione
+                params['cv_seed'] = 42 + iteration
                 if self.verbose:
                     print(f"\n[{i+1}/{len(grid_points)}] ", end="")
+                    for p, v in params.items():
+                        if p != 'cv_seed':
+                            print(f"{p}: {v}", end="")
                 
                 mean_acc, std_acc = self._evaluate_params(params, X, y)
                 
                 self.results.append({
                     'params': params.copy(),
                     'mean_accuracy': mean_acc,
+                    'std_accuracy': std_acc,
                     'iteration': iteration
                 })
                 
                 if mean_acc > iteration_best['mean']:
                     iteration_best = {'params': params.copy(), 'mean': mean_acc, 'std': std_acc}
                     if self.verbose:
-                        print("  → Migliore!")
+                        print(f"  → Migliore! ({mean_acc:.1f}%)")
             
             print(f"\nMiglior combinazione iterazione {iteration + 1}:")
             for param, value in iteration_best['params'].items():
                 if param != 'cv_seed':
                     print(f"  {param}: {value}")
-            print(f"  Accuracy: {iteration_best['mean']:.1f}%")
+            print(f"  Accuracy: {iteration_best['mean']:.2f}% ± {iteration_best['std']:.2f}%")
 
              # Aggiorna migliore globale
             if iteration_best['mean'] > best_overall['mean']:
                 best_overall = iteration_best.copy()
                 print("  → Nuovo migliore globale!")
             
-            # Restringo i range attorno al punto migliore
+            # Restringo i range attorno al punto migliore (del 30%)
             new_ranges = {}
             for param, (min_val, max_val) in current_ranges.items():
                 best_val = iteration_best['params'][param]
                 
                 # Calcolo nuovo range (restringe del 50% ogni iterazione)
                 range_width = max_val - min_val
-                new_min = max(best_val - range_width/4, min_val)
-                new_max = min(best_val + range_width/4, max_val)
+                new_min = max(best_val - range_width*0.15, min_val)
+                new_max = min(best_val + range_width*0.15, max_val)
                 
                 # Assicura che il range non diventi troppo piccolo
-                if param in ['hidden_neurons', 'epochs']:  # Parametri discreti
+                if param in ['hidden_neurons', 'epochs']:  
                     if new_max - new_min < 2:
-                        new_min = max(best_val - 1, min_val)
-                        new_max = min(best_val + 1, max_val)
+                        new_min = max(best_val - 2, min_val)
+                        new_max = min(best_val + 2, max_val)
                 else:  # Parametri continui
                     if new_max - new_min < 0.01:
                         new_min = max(best_val - 0.01, min_val)
@@ -220,7 +281,23 @@ class GridSearch:
                 new_ranges[param] = (new_min, new_max)
             
             current_ranges = new_ranges
+         # Fase di raffinamento finale
+        print("\n" + "="*60)
+        print("RAFFINAMENTO FINALE")
+        print("="*60)
         
+        refined_params, refined_mean, refined_std = self._local_refinement(
+            X, y, best_overall['params'], radius=0.1, n_points=5
+        )
+        
+        if refined_mean > best_overall['mean']:
+            best_overall = {
+                'params': refined_params,
+                'mean': refined_mean,
+                'std': refined_std
+            }
+            print("  → Parametri raffinati migliori dei precedenti!")
+
         # Salva risultati finali
         self.best_params = best_overall['params'].copy()
         if 'cv_seed' in self.best_params:
@@ -243,7 +320,7 @@ class GridSearch:
             print(f"\nPARAMETRI OTTIMALI:")
             for param, value in self.best_params.items():
                 print(f"  {param:15s}: {value}")
-            print(f"\n  Accuracy: {self.best_mean:.1f}% ± {self.best_std:.1f}%")
+            print(f"\n  Accuracy: {self.best_mean:.2f}% ± {self.best_std:.2f}%")
             print(f"  Test totali: {len(self.results)}")
     
     def _save_results(self):
@@ -263,10 +340,125 @@ class GridSearch:
                 'learning_rate': self.lr_range,
                 'hidden_neurons': self.hidden_range,
                 'epochs': self.epochs_range
-            }
+            },
+            'total_tests': len(self.results)
         }
         
         with open(filepath, 'w') as f:
             json.dump(data_to_save, f, indent=2)
         
         print(f"\nRisultati salvati in: {filepath}")
+
+    def run_trials(self, X_train, y_train, X_test, y_test, n_trials=50, 
+                   save_results=True, results_filename='trials_results.json'):
+        """
+        Esegue n_trials con i parametri ottimali trovati
+        """
+        if self.best_params is None:
+            print("Errore: Nessun parametro ottimale trovato. Esegui prima la ricerca dicotomica.")
+            return None
+        
+        print("\n" + "="*60)
+        print(f"ESECUZIONE DI {n_trials} TRIAL")
+        print("="*60)
+        
+        import neural_network as nn
+        
+        accuracies = []
+        times = []
+        
+        print(f"Parametri usati per {n_trials} trial:")
+        for param, value in self.best_params.items():
+            print(f"  {param}: {value}")
+        
+        print(f"\nInizio {n_trials} addestramenti...")
+        
+        for i in range(n_trials):
+            trial_start_time = time.time()
+            
+            if (i + 1) % 5 == 0:
+                print(f"  Trial {i+1}/{n_trials}...")
+            
+            # Crea rete con struttura dai parametri ottimali
+            input_size = X_train.shape[1]
+            structure = [input_size, self.best_params['hidden_neurons'], 1]
+            net = nn.NeuralNetwork(structure, eta=self.best_params['learning_rate'])
+            
+            # Imposto tanh e inizializzazione Xavier
+            for layer_idx, layer in enumerate(net.layers):
+                if layer_idx == 0:  # Input layer 
+                    continue
+                for neuron in layer:
+                    # Cambia a tanh
+                    neuron.activation_function_type = "tanh"
+                    
+                    # Inizializzazione Xavier per tanh
+                    n_inputs = len(neuron.weights)
+                    if n_inputs > 0:
+                        limit = np.sqrt(6.0 / (n_inputs + 1))
+                        neuron.weights = np.random.uniform(-limit, limit, n_inputs)
+                    neuron.bias = 0.0
+            
+            # Allena la rete
+            net.fit(X_train, X_test, y_train, y_test, 
+                    epochs=self.best_params['epochs'], verbose=False)
+            
+            # Valuta sul test set
+            predictions = net.predict(X_test)
+            pred_classes = (predictions >= 0.5).astype(int)
+            accuracy = np.mean(pred_classes == y_test) * 100
+            accuracies.append(accuracy)
+            
+            # Tempo del trial
+            trial_time = time.time() - trial_start_time
+            times.append(trial_time)
+        
+        # Calcola statistiche
+        mean_acc = np.mean(accuracies)
+        std_acc = np.std(accuracies)
+        min_acc = np.min(accuracies)
+        max_acc = np.max(accuracies)
+        total_time = np.sum(times)
+        
+        print(f"\nStatistiche su {n_trials} trial:")
+        print("-"*60)
+        print(f"Tempo totale: {total_time:.1f} secondi")
+        print(f"Tempo medio per trial: {np.mean(times):.1f} secondi")
+        print(f"\nAccuracy media: {mean_acc:.2f}%")
+        print(f"Deviazione standard: {std_acc:.2f}%")
+        print(f"Minimo: {min_acc:.2f}%")
+        print(f"Massimo: {max_acc:.2f}%")
+        print(f"Range: [{min_acc:.2f}%, {max_acc:.2f}%]")
+
+         # Salva risultati dei trial
+        if save_results:
+            trials_data = {
+                'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                'n_trials': n_trials,
+                'best_params': self.best_params,
+                'accuracies': accuracies,
+                'times': times,
+                'statistics': {
+                    'mean_accuracy': float(mean_acc),
+                    'std_accuracy': float(std_acc),
+                    'min_accuracy': float(min_acc),
+                    'max_accuracy': float(max_acc),
+                    'total_time': float(total_time),
+                    'avg_time_per_trial': float(np.mean(times))
+                }
+            }
+
+            filepath = os.path.join(self.results_dir, results_filename)
+            with open(filepath, 'w') as f:
+                json.dump(trials_data, f, indent=2)
+            
+            print(f"\nRisultati dei trial salvati in: {filepath}")
+        
+        return {
+            'mean_accuracy': mean_acc,
+            'std_accuracy': std_acc,
+            'min_accuracy': min_acc,
+            'max_accuracy': max_acc,
+            'accuracies': accuracies,
+            'total_time': total_time
+        }
