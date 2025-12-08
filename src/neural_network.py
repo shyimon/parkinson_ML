@@ -104,18 +104,18 @@ class NeuralNetwork:
         Calcola la loss in base al tipo specificato.
         """
         if loss_type == "half_mse":
-            return np.mean(0.5 * (y_true - y_pred) ** 2)
+            return 0.5 * (y_true - y_pred) ** 2
         elif loss_type == "mae":
-            return np.mean(np.abs(y_true - y_pred))
+            return np.abs(y_true - y_pred)
         elif loss_type == "log_cosh":
-            return np.mean(np.log(np.cosh(y_pred - y_true)))
+            return np.log(np.cosh(y_pred - y_true))
         elif loss_type == "huber":
             delta = 1.0
             error = y_true - y_pred
             is_small_error = np.abs(error) <= delta
             squared_loss = 0.5 * (error ** 2)
             linear_loss = delta * (np.abs(error) - 0.5 * delta)
-            return np.mean(np.where(is_small_error, squared_loss, linear_loss))
+            return np.where(is_small_error, squared_loss, linear_loss)
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
     
