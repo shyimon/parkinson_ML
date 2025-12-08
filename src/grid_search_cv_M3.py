@@ -341,7 +341,7 @@ class GridSearchM3:
         
         print(f"\nRisultati salvati in: {filepath}")
     
-    def run_trials(self, X_train, y_train, X_test, y_test, n_trials=500, 
+    def run_trials(self, X_train, y_train, X_test, y_test, n_trials=1000, 
                    save_results=True, results_filename='trials_results_monk3.json'):
         """
         Esegue n_trials con i parametri ottimali trovati per MONK3
@@ -418,9 +418,6 @@ class GridSearchM3:
         print(f"Tempo medio per trial: {np.mean(times):.1f} secondi")
         print(f"\nAccuracy media: {mean_acc:.2f}%")
         print(f"Deviazione standard: {std_acc:.2f}%")
-        min_range: np.floating[np.Any] = mean_acc - std_acc
-        max_range = mean_acc + std_acc
-        print(f"Range: [{min_range:.3.f}, {max_range:.3f}]")
         
         # Salva risultati dei trial
         if save_results:
