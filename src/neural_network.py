@@ -7,10 +7,10 @@ class NeuralNetwork:
     # Constructor
     # network_structure is the number of neurons in input, hidden layers
     # and output, expressed as an array. For example [6, 2, 2, 1].
-    def __init__(self, network_structure, eta=0.1):
+    def __init__(self, network_structure, eta=0.1, loss_type="half_mse"): # Modificato il costruttore per accettare diversi tipi di loss
         self.eta = eta
         self.loss_history = {"training": [], "test": []}
-        self.loss_type = "half_mse"
+        self.loss_type = loss_type
 
         self.layers = []
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
@@ -46,10 +46,16 @@ class NeuralNetwork:
         return np.array(preds)
 
     # backprop implementation
-    def backward(self, y_true):
-        for l in reversed(self.layers[1:]):
-            for n in l:
-                n.compute_delta(y_true)
+    def backward(self, error_signals):
+        if np.isscalar(error_signals) or (isinstance(error_signals, np.ndarray) and error_signals.ndim == 0):
+            error_signals = [error_signals] # Se error_signals è uno scalare (un numero singolo) o un array 0D, lo converte in una lista per renderlo iterabile
+        
+        for i, neuron in enumerate(self.layers[-1]): # Itera sui neuroni dell'ultimo layer
+            neuron.compute_delta(error_signals[i]) # Passa il segnale di errore specifico per ogni neurone di output
+        
+        for l in range(len(self.layers) - 2, 0, -1):
+            for neuron in self.layers[l]:
+                neuron.compute_delta(0)  # Per i neuroni nascosti, il segnale di errore non è necessario ma gli passiamo comunque 0
 
         for l in range(len(self.layers) - 1, 0, -1):
             for n in self.layers[l]:
@@ -70,8 +76,9 @@ class NeuralNetwork:
                 outputs = self.forward(xi)
                 y_pred = outputs[0]
                 total_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
+                error_signal = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type) # Calcolo del segnale di errore specifico per la loss scelta
 
-                self.backward(yi)
+                self.backward(error_signal) # Passa questo segnale al metodo backward
 
             avg_loss = total_loss / len(X)
             self.loss_history["training"].append(avg_loss)
@@ -94,16 +101,42 @@ class NeuralNetwork:
         
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
         """
-        Calcola la loss per un singolo esempio (quando verrà implementato il mini-batch
-        adatterò questa funzione di conseguenza) e gestisce sia valori singoli che array.
-        Args:
-            y_true (float o array): Valore target vero.
-            y_pred (float o array): Valore predetto dalla rete neurale.
-            loss_type (str): Tipo di loss da calcolare.
-        Returns:
-            float o array: Valore della loss calcolata.
+        Calcola la loss in base al tipo specificato.
         """
         if loss_type == "half_mse":
-            return 0.5 * (y_true - y_pred) ** 2
+            return np.mean(0.5 * (y_true - y_pred) ** 2)
+        elif loss_type == "mae":
+            return np.mean(np.abs(y_true - y_pred))
+        elif loss_type == "log_cosh":
+            return np.mean(np.log(np.cosh(y_pred - y_true)))
+        elif loss_type == "huber":
+            delta = 1.0
+            error = y_true - y_pred
+            is_small_error = np.abs(error) <= delta
+            squared_loss = 0.5 * (error ** 2)
+            linear_loss = delta * (np.abs(error) - 0.5 * delta)
+            return np.mean(np.where(is_small_error, squared_loss, linear_loss))
+        else:
+            raise ValueError(f"Loss type '{loss_type}' not implemented.")
+    
+    def compute_error_signal(self, y_true, y_pred, loss_type):
+        """
+        Calcola il segnale di errore da passare al neurone di output in base al tipo di loss specificato
+        """
+        error = y_true - y_pred 
+        
+        if loss_type == "half_mse":
+            return error
+        
+        elif loss_type == "mae":
+            return np.sign(error)
+        
+        elif loss_type == "log_cosh":
+            return np.tanh(error)
+        
+        elif loss_type == "huber":
+            delta = 1.0 # Deve coincidere con quello usato in compute_loss
+            is_small_error = np.abs(error) <= delta
+            return np.where(is_small_error, error, delta * np.sign(error)) # Se l'errore è piccolo si comporta come MSE (error), altrimenti come MAE (delta * sign(error))
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")

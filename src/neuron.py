@@ -46,15 +46,15 @@ class Neuron:
     
     # The delta computation for an output neuron and a hidden neuron are different, but
     # this method compounds them, checking the is_output_neuron flag (set at __init__ time)
-    def compute_delta(self, target):
+    def compute_delta(self, signal_error): # target viene sostituito con signal_error che arriva direttamente da neural_network.backward
         if self.is_output_neuron:
-            self.delta = (target - self.output) * self.activation_deriv(self.output)
+            self.delta = signal_error * self.activation_deriv(self.output)
         else:
             delta_sum = 0.0
             for k in self.attached_neurons:
                 w_kj = k.weights[self.index_in_layer]
                 delta_sum += k.delta * w_kj
-                self.delta = delta_sum * self.activation_deriv(self.output)
+            self.delta = delta_sum * self.activation_deriv(self.output)
         return self.delta
 
     # Update of the weights based on delta and learning rate.

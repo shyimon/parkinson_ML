@@ -19,13 +19,14 @@ network_structure.append(1)  # Output layer with 1 neuron
 eta = 0.7           # Learning rate
 
 # Network is created and trained
-nn = nn.NeuralNetwork(network_structure, eta=eta)
+print("Creating neural network with huber loss...")
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="huber")
 print("Start training...")
-nn.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=500)
+net.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=500)
 
 # Accuracy is computed for the training set
 print("\nCalculating accuracy...")
-y_pred = nn.predict(X_train_normalized)
+y_pred = net.predict(X_train_normalized)
 y_pred_class = np.where(y_pred >= 0.5, 1, 0)
 
 accuracy = np.mean(y_pred_class == y_train) * 100
