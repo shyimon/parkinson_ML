@@ -1,2 +1,0 @@
-config_id,cv_mean_accuracy,cv_std_accuracy,cv_mean_loss,test_accuracy,test_conf_interval,hidden_units,use_bias,weight_init,learning_rate,batch_size,max_epochs,seed,actual_hidden_units
-75,78.28%,4.95%,0.5654458803919854,65.51%,4.48%,7,True,xavier,0.05,16,200,42,7
