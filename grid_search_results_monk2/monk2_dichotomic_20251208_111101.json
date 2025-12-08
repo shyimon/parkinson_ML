@@ -1,0 +1,26 @@
+{
+  "timestamp": "2025-12-08 11:11:01",
+  "best_params": {
+    "learning_rate": 0.025750000000000002,
+    "hidden_neurons": 6,
+    "epochs": 1000
+  },
+  "cv_accuracy": 100.0,
+  "cv_std": 0.0,
+  "search_type": "monk2_dichotomic",
+  "initial_ranges": {
+    "learning_rate": [
+      0.001,
+      0.1
+    ],
+    "hidden_neurons": [
+      3,
+      10
+    ],
+    "epochs": [
+      400,
+      1000
+    ]
+  },
+  "total_tests": 525
+}
