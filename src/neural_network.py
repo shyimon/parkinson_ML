@@ -89,7 +89,7 @@ class NeuralNetwork:
             self.loss_history["test"].append(avg_test_loss)
             if epoch % 25 == 0:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}")
-        utils.draw_network(self.layers)
+        # utils.draw_network(self.layers)
 
     # a method to save the losses of the training and test sets as a plot
     def save_plots(self, path):
