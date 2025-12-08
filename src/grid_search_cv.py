@@ -22,7 +22,6 @@ class GridSearch:
         self.epochs_range = [300, 600]
     
     def _create_folds(self, X, y, seed=42):
-
         n_samples = len(X)
         indices = np.arange(n_samples)
         
@@ -30,22 +29,14 @@ class GridSearch:
         rng = np.random.RandomState(seed)
         rng.shuffle(indices)
         
-        #calcola dimensione di ogni fold
+        # calcola dimensione di ogni fold
         fold_size = n_samples // self.cv_folds
-
-        #calcola i samples rimanenti
         extra_samples = n_samples % self.cv_folds
 
         folds = []
         current_start = 0
         
-        #la riga end = start + fold size if i< self.cv_folds - 1 else n_samples, mette 
-        # i rimanenti fold della divisione intera nell'ultimo fold, così l'ultimo fold è 
-        # più grande degli altri. Ho fatto un cambiamento per distribuire i samples rimanenti
-        # dalla divisione intera tra i vari fold, così i fold hanno un numero di samples
-        # più bilanciato
         for i in range(self.cv_folds):
-            # Questo fold avrà dimensione fold_size + (1 se i < extra_samples)
             current_fold_size = fold_size + (1 if i < extra_samples else 0)
             start = current_start
             end = current_start + current_fold_size
@@ -78,13 +69,22 @@ class GridSearch:
                 neuron.bias = 0.0
 
         net.fit(X_train, X_val, y_train, y_val, epochs=params['epochs'])
-        predictions = net.predict(X_val)
-        pred_classes = (predictions >= 0.5).astype(int)
-        return np.mean(pred_classes == y_val) * 100    
+        
+        # Calcola accuracy sia su training che validation
+        train_predictions = net.predict(X_train)
+        train_pred_classes = (train_predictions >= 0.5).astype(int)
+        train_acc = np.mean(train_pred_classes == y_train) * 100
+        
+        val_predictions = net.predict(X_val)
+        val_pred_classes = (val_predictions >= 0.5).astype(int)
+        val_acc = np.mean(val_pred_classes == y_val) * 100
+        
+        return train_acc, val_acc
     
     def _evaluate_params(self, params, X, y):
         folds = self._create_folds(X, y, seed=params.get('cv_seed', 42))
-        accuracies = []
+        train_accuracies = []
+        val_accuracies = []
         
         for fold, (train_idx, val_idx) in enumerate(folds):
             X_train_fold = X[train_idx]
@@ -93,22 +93,32 @@ class GridSearch:
             y_val_fold = y[val_idx]
             
             try:
-                acc = self._train_single_model(X_train_fold, y_train_fold, X_val_fold, y_val_fold, params)
-                accuracies.append(acc)
+                train_acc, val_acc = self._train_single_model(
+                    X_train_fold, y_train_fold, X_val_fold, y_val_fold, params)
+                train_accuracies.append(train_acc)
+                val_accuracies.append(val_acc)
+                
                 if self.verbose:
-                    print(f"    Fold {fold+1}: {acc:.1f}%", end='  ')
+                    print(f"    Fold {fold+1}: Train={train_acc:.1f}%, Val={val_acc:.1f}%", end='  ')
             except Exception as e:
-                accuracies.append(0.0)
+                train_accuracies.append(0.0)
+                val_accuracies.append(0.0)
                 if self.verbose:
                     print(f"    Fold {fold+1}: errore", end='  ')
-        if accuracies:
-            mean_acc = np.mean(accuracies)
-            std_acc = np.std(accuracies)
-            if self.verbose:
-                print(f"\n    Media: {mean_acc:.1f}% ± {std_acc:.1f}%")
-            return mean_acc, std_acc
         
-        return 0.0, 0.0
+        if train_accuracies and val_accuracies:
+            mean_train_acc = np.mean(train_accuracies)
+            std_train_acc = np.std(train_accuracies)
+            mean_val_acc = np.mean(val_accuracies)
+            std_val_acc = np.std(val_accuracies)
+            
+            if self.verbose:
+                print(f"\n    Training: {mean_train_acc:.1f}% ± {std_train_acc:.1f}%")
+                print(f"    Validation: {mean_val_acc:.1f}% ± {std_val_acc:.1f}%")
+            
+            return mean_val_acc, std_val_acc, mean_train_acc, std_train_acc
+        
+        return 0.0, 0.0, 0.0, 0.0
     
     def _grid_points(self, ranges_dict, n_points=3):
         # genero punti della griglia uniformemente distribuiti nei range
@@ -136,7 +146,7 @@ class GridSearch:
         return grid_points
     
     def _local_refinement(self, X, y, best_params, radius=0.1, n_points=5):
-        #fase di raffinamento locale attorno ai parametri migliori
+        # fase di raffinamento locale attorno ai parametri migliori
         print(f"\nRaffinamento attorno a:")
         for param, value in best_params.items():
             if param != 'cv_seed':
@@ -168,31 +178,40 @@ class GridSearch:
         print(f"Punti di raffinamento: {len(grid_points)}")
         
         # Valuta tutti i punti
-        best_refined = {'params': None, 'mean': -np.inf, 'std': 0}
+        best_refined = {'params': None, 'val_mean': -np.inf, 'val_std': 0, 
+                       'train_mean': 0, 'train_std': 0}
         
         for i, params in enumerate(grid_points):
             params['cv_seed'] = 99  # Seed fisso per raffinamento
             if self.verbose:
                 print(f"\nRaffinamento [{i+1}/{len(grid_points)}] ", end="")
             
-            mean_acc, std_acc = self._evaluate_params(params, X, y)
+            val_mean, val_std, train_mean, train_std = self._evaluate_params(params, X, y)
             
             self.results.append({
                 'params': params.copy(),
-                'mean_accuracy': mean_acc,
-                'std_accuracy': std_acc,
+                'validation_mean_accuracy': val_mean,
+                'validation_std_accuracy': val_std,
+                'training_mean_accuracy': train_mean,
+                'training_std_accuracy': train_std,
                 'iteration': 'refinement'
             })
             
-            if mean_acc > best_refined['mean']:
-                best_refined = {'params': params.copy(), 'mean': mean_acc, 'std': std_acc}
+            if val_mean > best_refined['val_mean']:
+                best_refined = {
+                    'params': params.copy(), 
+                    'val_mean': val_mean, 
+                    'val_std': val_std,
+                    'train_mean': train_mean,
+                    'train_std': train_std
+                }
                 if self.verbose:
-                    print(f"→ Migliore! ({mean_acc:.2f}%)")
+                    print(f"→ Migliore! (Val: {val_mean:.2f}%, Train: {train_mean:.2f}%)")
         
-        return best_refined['params'], best_refined['mean'], best_refined['std']
+        return (best_refined['params'], best_refined['val_mean'], 
+                best_refined['val_std'], best_refined['train_mean'], best_refined['train_std'])
 
     def _dichotomic_search(self, X, y, max_iteration=3, n_points=3):
-
         print("\n" + "="*60)
         print("RICERCA DICOTOMICA N-DIMENSIONALE")
         print("="*60)
@@ -202,12 +221,9 @@ class GridSearch:
                           'hidden_neurons': tuple(self.hidden_range),
                           'epochs': tuple(self.epochs_range)
                           }
-        best_overall = {'params': None, 'mean': -np.inf, 'std': 0}
+        best_overall = {'params': None, 'val_mean': -np.inf, 'val_std': 0,
+                       'train_mean': 0, 'train_std': 0}
 
-    # ogni iterazione genera una griglia di n_points per parametro
-    # restringe i range del 50% attorno al punto migliore
-    # esplora tutte le combinazioni contemporaneamente
-    # funzione che aluta tutte le combinazioni di parametri contemporaneamente.
         for iteration in range(max_iteration):
             print(f"\n{'='*60}")
             print(f"ITERAZIONE {iteration + 1}")
@@ -222,39 +238,49 @@ class GridSearch:
             print(f"Punti da testare: {len(grid_points)}")
             
             # Valuta tutti i punti
-            iteration_best = {'params': None, 'mean': -np.inf, 'std': 0}
+            iteration_best = {'params': None, 'val_mean': -np.inf, 'val_std': 0,
+                             'train_mean': 0, 'train_std': 0}
 
             for i, params in enumerate(grid_points):
-                #seed diverso per ogni iterazione
+                # seed diverso per ogni iterazione
                 params['cv_seed'] = 42 + iteration
                 if self.verbose:
                     print(f"\n[{i+1}/{len(grid_points)}] ", end="")
                     for p, v in params.items():
                         if p != 'cv_seed':
-                            print(f"{p}: {v}", end="")
+                            print(f"{p}: {v} ", end="")
                 
-                mean_acc, std_acc = self._evaluate_params(params, X, y)
+                val_mean, val_std, train_mean, train_std = self._evaluate_params(params, X, y)
                 
                 self.results.append({
                     'params': params.copy(),
-                    'mean_accuracy': mean_acc,
-                    'std_accuracy': std_acc,
+                    'validation_mean_accuracy': val_mean,
+                    'validation_std_accuracy': val_std,
+                    'training_mean_accuracy': train_mean,
+                    'training_std_accuracy': train_std,
                     'iteration': iteration
                 })
                 
-                if mean_acc > iteration_best['mean']:
-                    iteration_best = {'params': params.copy(), 'mean': mean_acc, 'std': std_acc}
+                if val_mean > iteration_best['val_mean']:
+                    iteration_best = {
+                        'params': params.copy(), 
+                        'val_mean': val_mean, 
+                        'val_std': val_std,
+                        'train_mean': train_mean,
+                        'train_std': train_std
+                    }
                     if self.verbose:
-                        print(f"  → Migliore! ({mean_acc:.1f}%)")
+                        print(f"  → Migliore! (Val: {val_mean:.1f}%, Train: {train_mean:.1f}%)")
             
             print(f"\nMiglior combinazione iterazione {iteration + 1}:")
             for param, value in iteration_best['params'].items():
                 if param != 'cv_seed':
                     print(f"  {param}: {value}")
-            print(f"  Accuracy: {iteration_best['mean']:.2f}% ± {iteration_best['std']:.2f}%")
+            print(f"  Validation Accuracy: {iteration_best['val_mean']:.2f}% ± {iteration_best['val_std']:.2f}%")
+            print(f"  Training Accuracy: {iteration_best['train_mean']:.2f}% ± {iteration_best['train_std']:.2f}%")
 
              # Aggiorna migliore globale
-            if iteration_best['mean'] > best_overall['mean']:
+            if iteration_best['val_mean'] > best_overall['val_mean']:
                 best_overall = iteration_best.copy()
                 print("  → Nuovo migliore globale!")
             
@@ -281,20 +307,24 @@ class GridSearch:
                 new_ranges[param] = (new_min, new_max)
             
             current_ranges = new_ranges
-         # Fase di raffinamento finale
+        
+        # Fase di raffinamento finale
         print("\n" + "="*60)
         print("RAFFINAMENTO FINALE")
         print("="*60)
         
-        refined_params, refined_mean, refined_std = self._local_refinement(
+        (refined_params, refined_val_mean, refined_val_std, 
+         refined_train_mean, refined_train_std) = self._local_refinement(
             X, y, best_overall['params'], radius=0.1, n_points=5
         )
         
-        if refined_mean > best_overall['mean']:
+        if refined_val_mean > best_overall['val_mean']:
             best_overall = {
                 'params': refined_params,
-                'mean': refined_mean,
-                'std': refined_std
+                'val_mean': refined_val_mean,
+                'val_std': refined_val_std,
+                'train_mean': refined_train_mean,
+                'train_std': refined_train_std
             }
             print("  → Parametri raffinati migliori dei precedenti!")
 
@@ -303,13 +333,16 @@ class GridSearch:
         if 'cv_seed' in self.best_params:
             del self.best_params['cv_seed']
         
-        self.best_mean = best_overall['mean']
-        self.best_std = best_overall['std']
+        self.best_mean = best_overall['val_mean']
+        self.best_std = best_overall['val_std']
+        self.best_train_mean = best_overall['train_mean']
+        self.best_train_std = best_overall['train_std']
         
         self._print_results()
         self._save_results()
         
-        return self.best_params, self.best_mean, self.best_std
+        return (self.best_params, self.best_mean, self.best_std, 
+                self.best_train_mean, self.best_train_std)
 
     def _print_results(self):
         print("\n" + "="*60)
@@ -320,7 +353,9 @@ class GridSearch:
             print(f"\nPARAMETRI OTTIMALI:")
             for param, value in self.best_params.items():
                 print(f"  {param:15s}: {value}")
-            print(f"\n  Accuracy: {self.best_mean:.2f}% ± {self.best_std:.2f}%")
+            print(f"\n  Training Accuracy: {self.best_train_mean:.2f}% ± {self.best_train_std:.2f}%")
+            print(f"  Validation Accuracy: {self.best_mean:.2f}% ± {self.best_std:.2f}%")
+            print(f"  Gap (Train-Val): {self.best_train_mean - self.best_mean:.2f}%")
             print(f"  Test totali: {len(self.results)}")
     
     def _save_results(self):
@@ -333,8 +368,11 @@ class GridSearch:
         data_to_save = {
             'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
             'best_params': self.best_params,
-            'cv_accuracy': float(self.best_mean),
-            'cv_std': float(self.best_std),
+            'training_accuracy': float(self.best_train_mean),
+            'training_std': float(self.best_train_std),
+            'validation_accuracy': float(self.best_mean),
+            'validation_std': float(self.best_std),
+            'accuracy_gap': float(self.best_train_mean - self.best_mean),
             'search_type': 'nd_dichotomic',
             'initial_ranges': {
                 'learning_rate': self.lr_range,
@@ -349,10 +387,11 @@ class GridSearch:
         
         print(f"\nRisultati salvati in: {filepath}")
 
-    def run_trials(self, X_train, y_train, X_test, y_test, n_trials=200, 
+    def run_trials(self, X_train, y_train, X_test, y_test, n_trials=500, 
                    save_results=True, results_filename='trials_results.json'):
         """
         Esegue n_trials con i parametri ottimali trovati
+        Calcola training accuracy e test accuracy con le loro deviazioni standard
         """
         if self.best_params is None:
             print("Errore: Nessun parametro ottimale trovato. Esegui prima la ricerca dicotomica.")
@@ -364,7 +403,8 @@ class GridSearch:
         
         import neural_network as nn
         
-        accuracies = []
+        train_accuracies = []
+        test_accuracies = []
         times = []
         
         print(f"Parametri usati per {n_trials} trial:")
@@ -403,48 +443,103 @@ class GridSearch:
             net.fit(X_train, X_test, y_train, y_test, 
                     epochs=self.best_params['epochs'], verbose=False)
             
-            # Valuta sul test set
-            predictions = net.predict(X_test)
-            pred_classes = (predictions >= 0.5).astype(int)
-            accuracy = np.mean(pred_classes == y_test) * 100
-            accuracies.append(accuracy)
+            # Calcola training accuracy
+            train_predictions = net.predict(X_train)
+            train_pred_classes = (train_predictions >= 0.5).astype(int)
+            train_accuracy = np.mean(train_pred_classes == y_train) * 100
+            train_accuracies.append(train_accuracy)
+            
+            # Calcola test accuracy
+            test_predictions = net.predict(X_test)
+            test_pred_classes = (test_predictions >= 0.5).astype(int)
+            test_accuracy = np.mean(test_pred_classes == y_test) * 100
+            test_accuracies.append(test_accuracy)
             
             # Tempo del trial
             trial_time = time.time() - trial_start_time
             times.append(trial_time)
         
-        # Calcola statistiche
-        mean_acc = np.mean(accuracies)
-        std_acc = np.std(accuracies)
-        min_acc = np.min(accuracies)
-        max_acc = np.max(accuracies)
+        # Calcola statistiche per training accuracy
+        mean_train_acc = np.mean(train_accuracies)
+        std_train_acc = np.std(train_accuracies)
+        min_train_acc = np.min(train_accuracies)
+        max_train_acc = np.max(train_accuracies)
+        
+        # Calcola statistiche per test accuracy
+        mean_test_acc = np.mean(test_accuracies)
+        std_test_acc = np.std(test_accuracies)
+        min_test_acc = np.min(test_accuracies)
+        max_test_acc = np.max(test_accuracies)
+        
+        # Calcola gap medio tra training e test
+        accuracy_gaps = [train_acc - test_acc for train_acc, test_acc in zip(train_accuracies, test_accuracies)]
+        mean_gap = np.mean(accuracy_gaps)
+        std_gap = np.std(accuracy_gaps)
+        
         total_time = np.sum(times)
         
-        print(f"\nStatistiche su {n_trials} trial:")
-        print("-"*60)
+        print(f"\n{'='*60}")
+        print(f"STATISTICHE SU {n_trials} TRIAL")
+        print(f"{'='*60}")
         print(f"Tempo totale: {total_time:.1f} secondi")
         print(f"Tempo medio per trial: {np.mean(times):.1f} secondi")
-        print(f"\nAccuracy media: {mean_acc:.2f}%")
-        print(f"Deviazione standard: {std_acc:.2f}%")
-        min_range: np.floating[np.Any] = mean_acc - std_acc
-        max_range = mean_acc + std_acc
-        print(f"Range: [{min_range:.3.f}, {max_range:.3f}]")
-
-         # Salva risultati dei trial
+        
+        print(f"\n{'─'*60}")
+        print(f"TRAINING ACCURACY:")
+        print(f"{'─'*60}")
+        print(f"Media: {mean_train_acc:.2f}%")
+        print(f"Deviazione standard: {std_train_acc:.2f}%")
+        print(f"Minimo: {min_train_acc:.2f}%")
+        print(f"Massimo: {max_train_acc:.2f}%")
+        print(f"Range: [{mean_train_acc - std_train_acc:.2f}%, {mean_train_acc + std_train_acc:.2f}%]")
+        
+        print(f"\n{'─'*60}")
+        print(f"TEST ACCURACY:")
+        print(f"{'─'*60}")
+        print(f"Media: {mean_test_acc:.2f}%")
+        print(f"Deviazione standard: {std_test_acc:.2f}%")
+        print(f"Minimo: {min_test_acc:.2f}%")
+        print(f"Massimo: {max_test_acc:.2f}%")
+        print(f"Range: [{mean_test_acc - std_test_acc:.2f}%, {mean_test_acc + std_test_acc:.2f}%]")
+        
+        print(f"\n{'─'*60}")
+        print(f"GAP TRAINING-TEST:")
+        print(f"{'─'*60}")
+        print(f"Gap medio (Train - Test): {mean_gap:.2f}%")
+        print(f"Deviazione standard del gap: {std_gap:.2f}%")
+        print(f"Range gap: [{mean_gap - std_gap:.2f}%, {mean_gap + std_gap:.2f}%]")
+        
+        # Salva risultati dei trial
         if save_results:
             trials_data = {
                 'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
                 'n_trials': n_trials,
                 'best_params': self.best_params,
-                'accuracies': accuracies,
+                'training_accuracies': train_accuracies,
+                'test_accuracies': test_accuracies,
+                'accuracy_gaps': accuracy_gaps,
                 'times': times,
                 'statistics': {
-                    'mean_accuracy': float(mean_acc),
-                    'std_accuracy': float(std_acc),
-                    'min_accuracy': float(min_acc),
-                    'max_accuracy': float(max_acc),
-                    'total_time': float(total_time),
-                    'avg_time_per_trial': float(np.mean(times))
+                    'training_accuracy': {
+                        'mean': float(mean_train_acc),
+                        'std': float(std_train_acc),
+                        'min': float(min_train_acc),
+                        'max': float(max_train_acc)
+                    },
+                    'test_accuracy': {
+                        'mean': float(mean_test_acc),
+                        'std': float(std_test_acc),
+                        'min': float(min_test_acc),
+                        'max': float(max_test_acc)
+                    },
+                    'accuracy_gap': {
+                        'mean': float(mean_gap),
+                        'std': float(std_gap)
+                    },
+                    'time': {
+                        'total': float(total_time),
+                        'avg_per_trial': float(np.mean(times))
+                    }
                 }
             }
 
@@ -455,10 +550,27 @@ class GridSearch:
             print(f"\nRisultati dei trial salvati in: {filepath}")
         
         return {
-            'mean_accuracy': mean_acc,
-            'std_accuracy': std_acc,
-            'min_accuracy': min_acc,
-            'max_accuracy': max_acc,
-            'accuracies': accuracies,
-            'total_time': total_time
+            'training_accuracy': {
+                'mean': mean_train_acc,
+                'std': std_train_acc,
+                'min': min_train_acc,
+                'max': max_train_acc,
+                'values': train_accuracies
+            },
+            'test_accuracy': {
+                'mean': mean_test_acc,
+                'std': std_test_acc,
+                'min': min_test_acc,
+                'max': max_test_acc,
+                'values': test_accuracies
+            },
+            'accuracy_gap': {
+                'mean': mean_gap,
+                'std': std_gap,
+                'values': accuracy_gaps
+            },
+            'time': {
+                'total': total_time,
+                'avg_per_trial': np.mean(times)
+            }
         }
