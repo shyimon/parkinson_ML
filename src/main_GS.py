@@ -6,7 +6,7 @@ from data_manipulation import return_monk1
 from grid_search_cv import GridSearch
 
 def main():
-    num_trials = 200
+    num_trials = 500
     print("="*70)
     print(f"GRID SEARCH + {num_trials} TRIAL SU MONK1")
     print("="*70)
@@ -26,8 +26,8 @@ def main():
     gs.hidden_range = [2, 6]
     gs.epochs_range = [300, 600]
     
-    # Esegui ricerca dicotomica (con raffinamento finale)
-    best_params, cv_acc, cv_std = gs._dichotomic_search(
+   
+    best_params, cv_val_acc, cv_val_std, cv_train_acc, cv_train_std = gs._dichotomic_search(
         X_train, y_train,
         max_iteration=4,
         n_points=5
@@ -46,12 +46,15 @@ def main():
     print("\n" + "="*70)
     print("RISULTATO FINALE MONK 1")
     print("="*70)
-    print(f"Parametri ottimali: lr={best_params['learning_rate']:.4f}, "
-          f"hidden={best_params['hidden_neurons']}, epochs={best_params['epochs']}")
+    print(f"Parametri ottimali: lr={best_params['learning_rate']:.4f}, hidden={best_params['hidden_neurons']}, epochs={best_params['epochs']}, Training Accuracy:   {cv_train_acc:.2f}% ± {cv_train_std:.2f}%, Validation Accuracy: {cv_val_acc:.2f}% ± {cv_val_std:.2f}")
+    
     
     if trials_results:
-        print(f"\nAccuracy su {num_trials} trial: {trials_results['mean_accuracy']:.2f}% ± {trials_results['std_accuracy']:.2f}%")
-       
+        print(f"\n{num_trials} Trial indipendenti:")
+        print(f"  Training Accuracy: {trials_results['training_accuracy']['mean']:.2f}% ± {trials_results['training_accuracy']['std']:.2f}%")
+        print(f"  Test Accuracy:     {trials_results['test_accuracy']['mean']:.2f}% ± {trials_results['test_accuracy']['std']:.2f}%")
+        print(f"  Gap medio (Train-Test): {trials_results['accuracy_gap']['mean']:.2f}% ± {trials_results['accuracy_gap']['std']:.2f}%")
+        print(f"  Tempo totale: {trials_results['time']['total']:.1f} secondi")
 
 if __name__ == "__main__":
     main()

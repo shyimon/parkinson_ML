@@ -1,0 +1,29 @@
+{
+  "timestamp": "2025-12-08 17:27:57",
+  "best_params": {
+    "learning_rate": 0.13,
+    "hidden_neurons": 3,
+    "epochs": 600
+  },
+  "training_accuracy": 100.0,
+  "training_std": 0.0,
+  "validation_accuracy": 100.0,
+  "validation_std": 0.0,
+  "accuracy_gap": 0.0,
+  "search_type": "nd_dichotomic",
+  "initial_ranges": {
+    "learning_rate": [
+      0.01,
+      0.25
+    ],
+    "hidden_neurons": [
+      2,
+      6
+    ],
+    "epochs": [
+      300,
+      600
+    ]
+  },
+  "total_tests": 510
+}
