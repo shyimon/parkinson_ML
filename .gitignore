@@ -11,4 +11,6 @@ img/network.png
 Monk_Cosimo/__pycache__/data_manipulation.cpython-313.pyc
 Monk_Cosimo/__pycache__/training.cpython-313.pyc
 src/__pycache__/data_manipulation.cpython-313.pyc
+src/__pycache__/
 .gitignore
+
