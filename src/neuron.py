@@ -15,6 +15,18 @@ class Neuron:
         self.inputs = []
         self.attached_neurons = []
         
+        # Implementazione di una memoria per backprop e rprop
+        self.prev_weight_grad = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)
+        self.prev_bias_grad = 0.0 # Inizializza a zero la memoria del gradiente del bias al passo precedente 
+        
+        # Per quickprop
+        self.prev_weight_update = np.zeros(num_inputs) # Per ricordare l'ultimo aggiornamento dei pesi (t-1)
+        self.prev_bias_update = 0.0 # Inizializza a zero la memoria dell'ultimo aggiornamento del bias
+        
+        # Per rprop
+        self.rprop_step_w = np.full(num_inputs, 0.1) # Serve un valore del passo specifico per ogni peso (dal momento che non usa un eta globale) che viene inizializzato a 0.1
+        self.rprop_step_b = 0.1 # Lo stesso per il bias
+        
     # Updates the list of output neurons
     def attach_to_output(self, neurons):
         self.attached_neurons = list(neurons)
