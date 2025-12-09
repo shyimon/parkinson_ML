@@ -90,7 +90,7 @@ class NeuralNetwork:
             if epoch % 25 == 0:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}")
         #da modificare perchè ogni volta che fa il training dei 500 migliora l'immagine
-        utils.draw_network(self.layers)
+        # utils.draw_network(self.layers)
 
     # a method to save the losses of the training and test sets as a plot
     def save_plots(self, path):
@@ -141,3 +141,34 @@ class NeuralNetwork:
             return np.where(is_small_error, error, delta * np.sign(error)) # Se l'errore è piccolo si comporta come MSE (error), altrimenti come MAE (delta * sign(error))
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
+    
+    def _reset_gradients(self):
+        """Resetta tutti gli accumulatori di gradienti"""
+        for l in range(1, len(self.layers)):
+            for neuron in self.layers[l]:
+                neuron.reset_grad_accum()
+
+    def _apply_accumulated_gradients(self, batch_size):
+        """Applica gradienti accumulati a tutti i neuroni"""
+        for l in range(1, len(self.layers)):
+            for neuron in self.layers[l]:
+                neuron.apply_accumulated_gradients(self.eta, batch_size)
+
+    def backward(self, error_signals, accumulate=False):
+        """Versione modificata per supportare accumulazione"""
+        if np.isscalar(error_signals) or (isinstance(error_signals, np.ndarray) and error_signals.ndim == 0):
+            error_signals = [error_signals]
+        
+        for i, neuron in enumerate(self.layers[-1]):
+            neuron.compute_delta(error_signals[i])
+        
+        for l in range(len(self.layers) - 2, 0, -1):
+            for neuron in self.layers[l]:
+                neuron.compute_delta(0)  # Per i neuroni nascosti, il segnale di errore non è necessario ma gli passiamo comunque 0
+
+        for l in range(len(self.layers) - 1, 0, -1):
+            for n in self.layers[l]:
+                if accumulate:
+                    n.accumulate_gradients(self.eta)
+                else:
+                    n.update_weights(self.eta)

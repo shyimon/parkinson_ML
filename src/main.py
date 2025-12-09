@@ -32,7 +32,7 @@ accuracy = np.mean(y_pred_class == y_train) * 100
 print(f"\nFinal Training Accuracy: {accuracy:.2f}%")
 
 # Accuracy for the test set
-y_pred_test = nn.predict(X_test_normalized)
+y_pred_test = net.predict(X_test_normalized)
 y_pred_test_class = np.where(y_pred_test >= 0.5, 1, 0)
 test_accuracy = np.mean(y_pred_test_class == y_test) * 100
 print(f"Test Accuracy: {test_accuracy:.2f}%")
@@ -41,4 +41,4 @@ print(f"Test Accuracy: {test_accuracy:.2f}%")
 print(f"Details:")
 print(f"Correctly predicted training patterns: {np.sum(y_pred_class == y_train)}/{len(y_train)}")
 print(f"Correctly predicted test patterns: {np.sum(y_pred_test_class == y_test)}/{len(y_test)}")
-nn.save_plots("img/plot.png")
+net.save_plots("img/plot.png")
