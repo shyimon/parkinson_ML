@@ -16,8 +16,8 @@ class Neuron:
         self.attached_neurons = []
 
         #per mini-batch gradient accumulation
-        self.weight_grad_accum = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)
-        self.bias_grad_accum = 0.0 # Inizializza a zero la memoria del gradiente del bias al passo precedente 
+        self.prev_weight_grad = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)
+        self.prev_bias_grad = 0.0 # Inizializza a zero la memoria del gradiente del bias al passo precedente 
         
         # Per quickprop
         self.prev_weight_update = np.zeros(num_inputs) # Per ricordare l'ultimo aggiornamento dei pesi (t-1)
@@ -26,6 +26,10 @@ class Neuron:
         # Per rprop
         self.rprop_step_w = np.full(num_inputs, 0.1) # Serve un valore del passo specifico per ogni peso (dal momento che non usa un eta globale) che viene inizializzato a 0.1
         self.rprop_step_b = 0.1 # Lo stesso per il bias
+    
+    # Per mini-batch gradient accumulation
+        self.weight_grad_accum = np.zeros(num_inputs)
+        self.bias_grad_accum = 0.0
         
     # Updates the list of output neurons
     def attach_to_output(self, neurons):

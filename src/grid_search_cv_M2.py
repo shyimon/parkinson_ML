@@ -5,13 +5,6 @@ import json
 import itertools
 
 class GridSearchM2:
-    """
-    Grid Search ottimizzato per il dataset MONK2
-    MONK2 è più complesso di MONK1, quindi usiamo:
-    - Learning rate più piccolo
-    - Più neuroni nascosti
-    - Più epoche
-    """
     def __init__(self, cv_folds=5, verbose=True, results_dir='grid_search_results_monk2'):
         self.cv_folds = cv_folds
         self.verbose = verbose
@@ -27,7 +20,8 @@ class GridSearchM2:
         self.lr_range = [0.001, 0.1]     
         self.hidden_range = [3, 10]       
         self.epochs_range = [400, 1000]   
-    
+        self.batch_range = [16, 100]
+
     def _create_folds(self, X, y, seed=42):
         n_samples = len(X)
         indices = np.arange(n_samples)
@@ -72,7 +66,8 @@ class GridSearchM2:
                     neuron.weights = np.random.uniform(-limit, limit, n_inputs)
                 neuron.bias = 0.0
         
-        net.fit(X_train, X_val, y_train, y_val, epochs=params['epochs'])
+        batch_size = params.get('batch_size', 1)
+        net.fit(X_train, X_val, y_train, y_val, epochs=params['epochs'], batch_size=batch_size)
         predictions = net.predict(X_val)
         pred_classes = (predictions >= 0.5).astype(int)
         return np.mean(pred_classes == y_val) * 100
@@ -108,17 +103,20 @@ class GridSearchM2:
     
     def _grid_points(self, ranges_dict, n_points=5):
         grid_points = []
+        # per ogni parametro genero n_points valori uniformemente distribuiti
         param_values = {}
         
         for param_name, (min_val, max_val) in ranges_dict.items():
-            if param_name in ['hidden_neurons', 'epochs']:
+            if param_name in ['hidden_neurons', 'epochs', 'batch size']:
                 values = np.linspace(min_val, max_val, n_points).astype(int)
                 values = np.unique(values)
-                if len(values) < 3 and max_val - min_val >= 2:
-                    values = np.arange(min_val, max_val + 1, dtype=int)
-            else:
+                values = np.linspace(min_val, max_val, n_points).astype(int)
+                values = np.unique(values)  # Rimuove i duplicati
+                # Per batch_size, arrotonda alle potenze di 2 più vicine
+                if param_name == 'batch_size':
+                    values = [self._nearest_power_of_two(v) for v in values]
+            else:  # Parametri continui
                 values = np.linspace(min_val, max_val, n_points)
-            
             param_values[param_name] = values.tolist()
         
         param_names = list(param_values.keys())
@@ -130,6 +128,13 @@ class GridSearchM2:
         
         return grid_points
     
+    def _nearest_power_of_two(self, n):
+        """Trova la potenza di 2 più vicina a n"""
+        if n <= 1:
+            return 1
+        powers = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+        return min(powers, key=lambda x: abs(x - n))
+
     def _local_refinement(self, X, y, best_params, radius=0.1, n_points=5):
         print(f"\nRaffinamento attorno a:")
         for param, value in best_params.items():
@@ -152,6 +157,12 @@ class GridSearchM2:
             elif param == 'epochs':
                 min_val = max(value - 100, 200)
                 max_val = value + 100
+            elif param == 'batch_size':
+                # Per batch_size, cerca potenze di 2 vicine
+                current_powers = [1, 2, 4, 8, 16, 32, 64, 128, 256]
+                idx = current_powers.index(value) if value in current_powers else 0
+                min_val = current_powers[max(idx - 1, 0)]
+                max_val = current_powers[min(idx + 1, len(current_powers) - 1)]
             else:
                 min_val = value * 0.9
                 max_val = value * 1.1
@@ -194,7 +205,8 @@ class GridSearchM2:
         current_ranges = {
             'learning_rate': tuple(self.lr_range), 
             'hidden_neurons': tuple(self.hidden_range),
-            'epochs': tuple(self.epochs_range)
+            'epochs': tuple(self.epochs_range),
+            'batch_size': (min(self.batch_range), max(self.batch_range))
         }
         
         best_overall = {'params': None, 'mean': -np.inf, 'std': 0}
@@ -399,8 +411,9 @@ class GridSearchM2:
                     neuron.bias = 0.0
             
             # Allena la rete
+            batch_size = self.best_params.get('batch_size', 1)
             net.fit(X_train, X_test, y_train, y_test, 
-                    epochs=self.best_params['epochs'], verbose=False)
+                    epochs=self.best_params['epochs'], batch_size=batch_size, verbose=False)
             
             # Valuta sul test set
             predictions = net.predict(X_test)

@@ -45,50 +45,97 @@ class NeuralNetwork:
                 preds.append(float(out))
         return np.array(preds)
 
+    def _reset_gradients(self):
+        """Resetta tutti gli accumulatori di gradienti"""
+        for l in range(1, len(self.layers)):
+            for neuron in self.layers[l]:
+                neuron.reset_grad_accum()
+
+    def _apply_accumulated_gradients(self, batch_size):
+        """Applica gradienti accumulati a tutti i neuroni"""
+        for l in range(1, len(self.layers)):
+            for neuron in self.layers[l]:
+                neuron.apply_accumulated_gradients(self.eta, batch_size)
+
     # backprop implementation
-    def backward(self, error_signals):
+    def backward(self, error_signals, accumulate=False):
+        """Versione modificata per supportare accumulazione"""
         if np.isscalar(error_signals) or (isinstance(error_signals, np.ndarray) and error_signals.ndim == 0):
-            error_signals = [error_signals] # Se error_signals è uno scalare (un numero singolo) o un array 0D, lo converte in una lista per renderlo iterabile
+            error_signals = [error_signals]
         
-        for i, neuron in enumerate(self.layers[-1]): # Itera sui neuroni dell'ultimo layer
-            neuron.compute_delta(error_signals[i]) # Passa il segnale di errore specifico per ogni neurone di output
+        for i, neuron in enumerate(self.layers[-1]):
+            neuron.compute_delta(error_signals[i])
         
         for l in range(len(self.layers) - 2, 0, -1):
             for neuron in self.layers[l]:
-                neuron.compute_delta(0)  # Per i neuroni nascosti, il segnale di errore non è necessario ma gli passiamo comunque 0
+                neuron.compute_delta(0)
 
         for l in range(len(self.layers) - 1, 0, -1):
             for n in self.layers[l]:
-                n.update_weights(self.eta)
-
+                if accumulate:
+                    n.accumulate_gradients(self.eta)
+                else:
+                    n.update_weights(self.eta)
     # core training method.
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
-    def fit(self, X, X_test, y, y_test, epochs=1000, verbose=True):
+    def fit(self, X, X_test, y, y_test, epochs=1000, batch_size=1, verbose=True):
         X = np.array(X, dtype=float)
         y = np.array(y, dtype=float)
-
+        
         for epoch in range(epochs):
             total_loss = 0.0
             test_loss = 0.0
-            for xi, yi in zip(X, y):
-                outputs = self.forward(xi)
-                y_pred = outputs[0]
-                total_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
-                error_signal = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type) # Calcolo del segnale di errore specifico per la loss scelta
-
-                self.backward(error_signal) # Passa questo segnale al metodo backward
-
+            
+            if batch_size == 1:  # Online learning (comportamento originale)
+                for xi, yi in zip(X, y):
+                    outputs = self.forward(xi)
+                    y_pred = outputs[0]
+                    total_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
+                    error_signal = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
+                    self.backward(error_signal)
+            else:  # Mini-batch con shuffling
+                # 1. Shuffle dei dati all'inizio di ogni epoca
+                indices = np.arange(len(X))
+                np.random.shuffle(indices)
+                X_shuffled = X[indices]
+                y_shuffled = y[indices]
+                
+                # 2. Divisione in batch
+                for start_idx in range(0, len(X), batch_size):
+                    end_idx = min(start_idx + batch_size, len(X))
+                    
+                    # Reset accumulazione gradienti per ogni batch
+                    self._reset_gradients()
+                    
+                    # Accumula gradienti per tutti i campioni nel batch
+                    batch_loss = 0.0
+                    for i in range(start_idx, end_idx):
+                        xi = X_shuffled[i]
+                        yi = y_shuffled[i]
+                        
+                        outputs = self.forward(xi)
+                        y_pred = outputs[0]
+                        batch_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
+                        error_signal = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
+                        self.backward(error_signal, accumulate=True)
+                    
+                    # Applica gradienti accumulati (media del batch)
+                    self._apply_accumulated_gradients(batch_size=end_idx - start_idx)
+                    total_loss += batch_loss
+            
             avg_loss = total_loss / len(X)
             self.loss_history["training"].append(avg_loss)
-
+            
             y_pred_test = self.predict(X_test)
             test_loss = np.sum(self.compute_loss(y_test, y_pred_test.flatten(), loss_type=self.loss_type))
             avg_test_loss = test_loss / len(y_test)
             self.loss_history["test"].append(avg_test_loss)
-            if epoch % 25 == 0:
-                print(f"Epoch {epoch}, Loss: {avg_loss:.4f}")
+            
+            if epoch % 25 == 0 and verbose:
+                print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}")
+
         #da modificare perchè ogni volta che fa il training dei 500 migliora l'immagine
         # utils.draw_network(self.layers)
 
@@ -148,27 +195,4 @@ class NeuralNetwork:
             for neuron in self.layers[l]:
                 neuron.reset_grad_accum()
 
-    def _apply_accumulated_gradients(self, batch_size):
-        """Applica gradienti accumulati a tutti i neuroni"""
-        for l in range(1, len(self.layers)):
-            for neuron in self.layers[l]:
-                neuron.apply_accumulated_gradients(self.eta, batch_size)
-
-    def backward(self, error_signals, accumulate=False):
-        """Versione modificata per supportare accumulazione"""
-        if np.isscalar(error_signals) or (isinstance(error_signals, np.ndarray) and error_signals.ndim == 0):
-            error_signals = [error_signals]
-        
-        for i, neuron in enumerate(self.layers[-1]):
-            neuron.compute_delta(error_signals[i])
-        
-        for l in range(len(self.layers) - 2, 0, -1):
-            for neuron in self.layers[l]:
-                neuron.compute_delta(0)  # Per i neuroni nascosti, il segnale di errore non è necessario ma gli passiamo comunque 0
-
-        for l in range(len(self.layers) - 1, 0, -1):
-            for n in self.layers[l]:
-                if accumulate:
-                    n.accumulate_gradients(self.eta)
-                else:
-                    n.update_weights(self.eta)
+   
