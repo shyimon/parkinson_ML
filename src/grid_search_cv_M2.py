@@ -347,7 +347,7 @@ class GridSearchM2:
         
         print(f"\nRisultati salvati in: {filepath}")
     
-    def run_trials(self, X_train, y_train, X_test, y_test, n_trials=300, 
+    def run_trials(self, X_train, y_train, X_test, y_test, n_trials=500, 
                    save_results=True, results_filename='trials_results_monk2.json'):
         """
         Esegue n_trials con i parametri ottimali trovati per MONK2

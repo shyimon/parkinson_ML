@@ -40,7 +40,7 @@ def main():
     
     trials_results = gs.run_trials(
         X_train, y_train, X_test, y_test,
-        n_trials=300,
+        n_trials=500,
         save_results=True,
         results_filename='trials_results_monk2.json'
     )

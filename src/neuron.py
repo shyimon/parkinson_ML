@@ -14,10 +14,10 @@ class Neuron:
         self.delta = 0.0
         self.inputs = []
         self.attached_neurons = []
-        
-        # Implementazione di una memoria per backprop e rprop
-        self.prev_weight_grad = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)
-        self.prev_bias_grad = 0.0 # Inizializza a zero la memoria del gradiente del bias al passo precedente 
+
+        #per mini-batch gradient accumulation
+        self.weight_grad_accum = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)
+        self.bias_grad_accum = 0.0 # Inizializza a zero la memoria del gradiente del bias al passo precedente 
         
         # Per quickprop
         self.prev_weight_update = np.zeros(num_inputs) # Per ricordare l'ultimo aggiornamento dei pesi (t-1)
@@ -69,8 +69,24 @@ class Neuron:
             self.delta = delta_sum * self.activation_deriv(self.output)
         return self.delta
 
-    # Update of the weights based on delta and learning rate.
-    # The updated weights are the "incoming" edges!
     def update_weights(self, eta):
         self.weights += eta * self.delta * self.inputs
         self.bias += eta * self.delta
+    
+    def accumulate_gradients(self, eta):
+        """Accumula gradienti invece di aggiornare immediatamente"""
+        self.weight_grad_accum += self.delta * self.inputs
+        self.bias_grad_accum += self.delta
+    
+    def apply_accumulated_gradients(self, eta, batch_size):
+        """Applica gradienti accumulati (media del batch)"""
+        self.weights += (eta / batch_size) * self.weight_grad_accum
+        self.bias += (eta / batch_size) * self.bias_grad_accum
+        # Resetta accumuli
+        self.weight_grad_accum.fill(0.0)
+        self.bias_grad_accum = 0.0
+    
+    def reset_grad_accum(self):
+        """Resetta accumulatore gradienti"""
+        self.weight_grad_accum.fill(0.0)
+        self.bias_grad_accum = 0.0
