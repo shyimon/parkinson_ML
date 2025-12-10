@@ -7,8 +7,9 @@ class NeuralNetwork:
     # Constructor
     # network_structure is the number of neurons in input, hidden layers
     # and output, expressed as an array. For example [6, 2, 2, 1].
-    def __init__(self, network_structure, eta=0.1, loss_type="half_mse"): # Modificato il costruttore per accettare diversi tipi di loss
+    def __init__(self, network_structure, eta=0.1, loss_type="half_mse", l2_lambda=0.00): # Modificato il costruttore per accettare diversi tipi di loss
         self.eta = eta
+        self.l2_lambda = l2_lambda
         self.loss_history = {"training": [], "test": []}
         self.loss_type = loss_type
 
@@ -55,7 +56,7 @@ class NeuralNetwork:
         """Applica gradienti accumulati a tutti i neuroni"""
         for l in range(1, len(self.layers)):
             for neuron in self.layers[l]:
-                neuron.apply_accumulated_gradients(self.eta, batch_size)
+                neuron.apply_accumulated_gradients(self.eta, batch_size, l2_lambda=self.l2_lambda)
 
     # backprop implementation
     def backward(self, error_signals, accumulate=False):
@@ -68,14 +69,15 @@ class NeuralNetwork:
         
         for l in range(len(self.layers) - 2, 0, -1):
             for neuron in self.layers[l]:
-                neuron.compute_delta(0)
+                neuron.compute_delta(None)
 
         for l in range(len(self.layers) - 1, 0, -1):
             for n in self.layers[l]:
                 if accumulate:
-                    n.accumulate_gradients(self.eta)
+                    n.accumulate_gradients()
                 else:
-                    n.update_weights(self.eta)
+                    n.update_weights(self.eta, l2_lambda=self.l2_lambda)
+                    
     # core training method.
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
@@ -135,9 +137,6 @@ class NeuralNetwork:
             
             if epoch % 25 == 0 and verbose:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}")
-
-        #da modificare perchè ogni volta che fa il training dei 500 migliora l'immagine
-        # utils.draw_network(self.layers)
 
     # a method to save the losses of the training and test sets as a plot
     def save_plots(self, path):

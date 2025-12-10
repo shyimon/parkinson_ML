@@ -62,7 +62,7 @@ class Neuron:
     
     # The delta computation for an output neuron and a hidden neuron are different, but
     # this method compounds them, checking the is_output_neuron flag (set at __init__ time)
-    def compute_delta(self, signal_error): # target viene sostituito con signal_error che arriva direttamente da neural_network.backward
+    def compute_delta(self, signal_error=None): # target viene sostituito con signal_error che arriva direttamente da neural_network.backward
         if self.is_output_neuron:
             self.delta = signal_error * self.activation_deriv(self.output)
         else:
@@ -73,19 +73,22 @@ class Neuron:
             self.delta = delta_sum * self.activation_deriv(self.output)
         return self.delta
 
-    def update_weights(self, eta):
-        self.weights += eta * self.delta * self.inputs
+    def update_weights(self, eta, l2_lambda=0.00):
+        self.weights += eta * (self.delta * self.inputs - l2_lambda * self.weights)
         self.bias += eta * self.delta
     
-    def accumulate_gradients(self, eta):
+    def accumulate_gradients(self):
         """Accumula gradienti invece di aggiornare immediatamente"""
         self.weight_grad_accum += self.delta * self.inputs
         self.bias_grad_accum += self.delta
     
-    def apply_accumulated_gradients(self, eta, batch_size):
+    def apply_accumulated_gradients(self, eta, batch_size, l2_lambda=0.00):
         """Applica gradienti accumulati (media del batch)"""
-        self.weights += (eta / batch_size) * self.weight_grad_accum
-        self.bias += (eta / batch_size) * self.bias_grad_accum
+        grad_w = self.weight_grad_accum / batch_size
+        grad_b = self.bias_grad_accum / batch_size  
+                    
+        self.weights += eta * (grad_w - l2_lambda * self.weights)
+        self.bias += eta * grad_b
         # Resetta accumuli
         self.weight_grad_accum.fill(0.0)
         self.bias_grad_accum = 0.0
