@@ -3,7 +3,7 @@ import data_manipulation as data
 import neural_network as nn
 
 
-X_train, y_train, X_test, y_test = data.return_monk3(one_hot=True)
+X_train, y_train, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
 
 # Normalization
 # X_train_normalized = data.normalize(X_train, 0, 1)
@@ -11,9 +11,8 @@ X_train, y_train, X_test, y_test = data.return_monk3(one_hot=True)
 X_train_normalized = X_train
 X_test_normalized = X_test
 
-
 network_structure = [X_train_normalized.shape[1]]
-network_structure.append(7)  # Hidden layer with 4 neurons
+network_structure.append(6)  # Hidden layer with 4 neurons
 network_structure.append(1)  # Output layer with 1 neuron
 eta = 0.6           # Learning rate
 
@@ -21,7 +20,7 @@ eta = 0.6           # Learning rate
 print("Creating neural network with huber loss...")
 net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="huber")
 print("Start training...")
-net.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=100, batch_size=20)
+net.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=400, batch_size=20)
 
 # Accuracy for the training set
 print("\nCalculating accuracy...")
@@ -36,7 +35,6 @@ y_pred_test = net.predict(X_test_normalized)
 y_pred_test_class = np.where(y_pred_test >= 0.5, 1, 0)
 test_accuracy = np.mean(y_pred_test_class == y_test) * 100
 print(f"Test Accuracy: {test_accuracy:.2f}%")
-
 
 print(f"Details:")
 print(f"Correctly predicted training patterns: {np.sum(y_pred_class == y_train)}/{len(y_train)}")
