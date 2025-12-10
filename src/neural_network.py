@@ -85,56 +85,53 @@ class NeuralNetwork:
     def fit(self, X, X_test, y, y_test, epochs=1000, batch_size=1, verbose=True):
         X = np.array(X, dtype=float)
         y = np.array(y, dtype=float)
-        
+
         for epoch in range(epochs):
             total_loss = 0.0
-            test_loss = 0.0
-            
-            if batch_size == 1:  # Online learning (comportamento originale)
-                for xi, yi in zip(X, y):
+
+            # Shuffle every epoch
+            indices = np.arange(len(X))
+            np.random.shuffle(indices)
+            X_shuffled = X[indices]
+            y_shuffled = y[indices]
+
+            # Unified batch loop
+            for start_idx in range(0, len(X), batch_size):
+
+                end_idx = min(start_idx + batch_size, len(X))
+                current_batch_size = end_idx - start_idx
+
+                # Reset accumulators
+                self._reset_gradients()
+
+                batch_loss = 0.0
+
+                # Accumulate gradients inside the batch
+                for i in range(start_idx, end_idx):
+                    xi = X_shuffled[i]
+                    yi = y_shuffled[i]
+
                     outputs = self.forward(xi)
                     y_pred = outputs[0]
-                    total_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
-                    error_signal = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
-                    self.backward(error_signal)
-            else:  # Mini-batch con shuffling
-                # 1. Shuffle dei dati all'inizio di ogni epoca
-                indices = np.arange(len(X))
-                np.random.shuffle(indices)
-                X_shuffled = X[indices]
-                y_shuffled = y[indices]
-                
-                # 2. Divisione in batch
-                for start_idx in range(0, len(X), batch_size):
-                    end_idx = min(start_idx + batch_size, len(X))
-                    
-                    # Reset accumulazione gradienti per ogni batch
-                    self._reset_gradients()
-                    
-                    # Accumula gradienti per tutti i campioni nel batch
-                    batch_loss = 0.0
-                    for i in range(start_idx, end_idx):
-                        xi = X_shuffled[i]
-                        yi = y_shuffled[i]
-                        
-                        outputs = self.forward(xi)
-                        y_pred = outputs[0]
-                        batch_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
-                        error_signal = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
-                        self.backward(error_signal, accumulate=True)
-                    
-                    # Applica gradienti accumulati (media del batch)
-                    self._apply_accumulated_gradients(batch_size=end_idx - start_idx)
-                    total_loss += batch_loss
-            
+
+                    batch_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
+
+                    err = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
+                    self.backward(err, accumulate=True)
+
+                # Apply accumulated gradient once
+                self._apply_accumulated_gradients(batch_size=current_batch_size)
+                total_loss += batch_loss
+
             avg_loss = total_loss / len(X)
             self.loss_history["training"].append(avg_loss)
-            
+
+            # Test loss
             y_pred_test = self.predict(X_test)
             test_loss = np.sum(self.compute_loss(y_test, y_pred_test.flatten(), loss_type=self.loss_type))
             avg_test_loss = test_loss / len(y_test)
             self.loss_history["test"].append(avg_test_loss)
-            
+
             if epoch % 25 == 0 and verbose:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}")
 

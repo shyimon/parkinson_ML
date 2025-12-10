@@ -14,13 +14,13 @@ X_test_normalized = X_test
 network_structure = [X_train_normalized.shape[1]]
 network_structure.append(6)  # Hidden layer with 4 neurons
 network_structure.append(1)  # Output layer with 1 neuron
-eta = 0.1        # Learning rate
+eta = 0.5        # Learning rate
 
 # Network is created and trained
 print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="huber", l2_lambda=0.005)
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="huber", l2_lambda=0.00)
 print("Start training...")
-net.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=400, batch_size=16)
+net.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=400, batch_size=124)
 
 # Accuracy for the training set
 print("\nCalculating accuracy...")
