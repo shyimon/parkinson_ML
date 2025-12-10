@@ -14,3 +14,6 @@ src/__pycache__/data_manipulation.cpython-313.pyc
 src/__pycache__/
 .gitignore
 
+src/img/network.png
+.gitignore
+src/img/network

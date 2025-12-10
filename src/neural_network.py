@@ -146,6 +146,9 @@ class NeuralNetwork:
         plt.legend()
         plt.ylim(0, max(max(self.loss_history["training"]), max(self.loss_history["test"])) * 1.1)
         plt.savefig(path)
+
+    def draw_network(self, path):
+        utils.draw_network(self.layers, path)
         
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
         """

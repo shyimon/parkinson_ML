@@ -1,10 +1,12 @@
 import os
-graphviz_path = r"C:\Graphviz\bin"
-os.environ["PATH"] = graphviz_path + os.pathsep + os.environ["PATH"]
+from sys import platform
+if platform == "win32":
+    graphviz_path = r"C:\Graphviz\bin"
+    os.environ["PATH"] = graphviz_path + os.pathsep + os.environ["PATH"]
 from graphviz import Digraph
 
 # A method to render and save a graphical representation of the nerwork passed using the graphviz library
-def draw_network(layers, filename="img/network"):
+def draw_network(layers, path="img/network"):
     dot = Digraph(format="png")
     dot.attr(rankdir='LR', splines='line', ranksep='3')
 
@@ -41,4 +43,4 @@ def draw_network(layers, filename="img/network"):
                 dot.edge(f"{layer - 1}_{connection}", f"{layer}_{neuron}", color=color, penwidth=penwidth, taillabel=label, labelangle="0", labeldistance="7")
 
 
-    dot.render(filename, cleanup=True)
+    dot.render(path, cleanup=True)
