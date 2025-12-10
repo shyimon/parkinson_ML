@@ -146,6 +146,9 @@ class NeuralNetwork:
         plt.legend()
         plt.ylim(0, max(max(self.loss_history["training"]), max(self.loss_history["test"])) * 1.1)
         plt.savefig(path)
+
+    def draw_network(self, path):
+        utils.draw_network(self.layers, path)
         
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
         """
@@ -188,11 +191,4 @@ class NeuralNetwork:
             return np.where(is_small_error, error, delta * np.sign(error)) # Se l'errore è piccolo si comporta come MSE (error), altrimenti come MAE (delta * sign(error))
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
-    
-    def _reset_gradients(self):
-        """Resetta tutti gli accumulatori di gradienti"""
-        for l in range(1, len(self.layers)):
-            for neuron in self.layers[l]:
-                neuron.reset_grad_accum()
-
    
