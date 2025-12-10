@@ -41,12 +41,18 @@ def return_monk1(dataset_shuffle=False, one_hot=False):
 
 
 def return_monk2(dataset_shuffle=True, one_hot=False):
-    monk2_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.train'
-    monk2_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.test'
-    column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
+    try:
+        monk2_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.train'
+        monk2_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.test'
+        column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
 
-    monk2_train = pd.read_csv(monk2_train_url, header=None, names=column_names, sep="\\s+")
-    monk2_test = pd.read_csv(monk2_test_url, header=None, names=column_names, sep="\\s+")
+        monk2_train = pd.read_csv(monk2_train_url, header=None, names=column_names, sep="\s+")
+        monk2_test = pd.read_csv(monk2_test_url, header=None, names=column_names, sep="\s+")
+
+        print("MONK2 caricato da UCI")
+    except Exception as e:
+        print(f"Errore nel caricamento da URL: {e}")
+        print("Tento di caricare da file locali...")
 
     if dataset_shuffle:
         monk2_train = monk2_train.sample(frac=1).reset_index(drop=True)

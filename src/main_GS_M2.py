@@ -6,7 +6,7 @@ from data_manipulation import return_monk2
 from grid_search_cv_M2 import GridSearchM2
 
 def main():
-    num_trials = 300
+    num_trials = 500
     print("="*70)
     print(f"GRID SEARCH + {num_trials} TRIAL SU MONK2")
     print("="*70)
@@ -23,10 +23,11 @@ def main():
     # Usa GridSearch ottimizzato per MONK2
     gs = GridSearchM2(cv_folds=5, verbose=True, results_dir='grid_search_results_monk2')
     
-    # I range sono già impostati nel costruttore per MONK2
-    # gs.lr_range = [0.001, 0.1]
-    # gs.hidden_range = [3, 8]
-    # gs.epochs_range = [400, 1000]
+     # I range sono già impostati nel costruttore per MONK2
+    gs.lr_range = [0.001, 0.1]
+    gs.hidden_range = [3, 8]
+    gs.epochs_range = [400, 1000]
+    gs.batch_range = [1, 68]
     
     # Esegui ricerca dicotomica (con raffinamento finale)
     best_params, cv_acc, cv_std = gs._dichotomic_search(

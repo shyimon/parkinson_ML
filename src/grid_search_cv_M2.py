@@ -103,13 +103,10 @@ class GridSearchM2:
     
     def _grid_points(self, ranges_dict, n_points=5):
         grid_points = []
-        # per ogni parametro genero n_points valori uniformemente distribuiti
         param_values = {}
         
         for param_name, (min_val, max_val) in ranges_dict.items():
-            if param_name in ['hidden_neurons', 'epochs', 'batch size']:
-                values = np.linspace(min_val, max_val, n_points).astype(int)
-                values = np.unique(values)
+            if param_name in ['hidden_neurons', 'epochs', 'batch_size']:  # CORRETTO
                 values = np.linspace(min_val, max_val, n_points).astype(int)
                 values = np.unique(values)  # Rimuove i duplicati
                 # Per batch_size, arrotonda alle potenze di 2 più vicine
@@ -117,7 +114,8 @@ class GridSearchM2:
                     values = [self._nearest_power_of_two(v) for v in values]
             else:  # Parametri continui
                 values = np.linspace(min_val, max_val, n_points)
-            param_values[param_name] = values.tolist()
+            
+            param_values[param_name] = values
         
         param_names = list(param_values.keys())
         value_combinations = list(itertools.product(*[param_values[name] for name in param_names]))

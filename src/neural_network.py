@@ -189,10 +189,6 @@ class NeuralNetwork:
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
     
-    def _reset_gradients(self):
-        """Resetta tutti gli accumulatori di gradienti"""
-        for l in range(1, len(self.layers)):
-            for neuron in self.layers[l]:
-                neuron.reset_grad_accum()
+    
 
    
