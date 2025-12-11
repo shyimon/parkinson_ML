@@ -18,8 +18,8 @@ eta = 0.5        # Learning rate
 
 # Network is created and trained
 print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="huber", l2_lambda=0.00)
-print("Start training...")
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="huber", l2_lambda=0.00, algorithm='sgd', eta_plus=1.2, eta_minus=0.5)
+print("Start training with sgd...")
 net.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=400, batch_size=124)
 
 # Accuracy for the training set

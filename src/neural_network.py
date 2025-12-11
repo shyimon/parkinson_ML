@@ -7,12 +7,13 @@ class NeuralNetwork:
     # Constructor
     # network_structure is the number of neurons in input, hidden layers
     # and output, expressed as an array. For example [6, 2, 2, 1].
-    def __init__(self, network_structure, eta=0.1, loss_type="half_mse", l2_lambda=0.00): # Modificato il costruttore per accettare diversi tipi di loss
+    def __init__(self, network_structure, eta=0.1, loss_type="half_mse", l2_lambda=0.00, algorithm='sgd', **kwargs): # Modificato il costruttore per accettare diversi tipi di loss
         self.eta = eta
         self.l2_lambda = l2_lambda
         self.loss_history = {"training": [], "test": []}
         self.loss_type = loss_type
-
+        self.algorithm = algorithm
+        self.kwargs = kwargs
         self.layers = []
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
                 activation_function_type="sigmoid", is_output_neuron=False) 
@@ -56,7 +57,7 @@ class NeuralNetwork:
         """Applica gradienti accumulati a tutti i neuroni"""
         for l in range(1, len(self.layers)):
             for neuron in self.layers[l]:
-                neuron.apply_accumulated_gradients(self.eta, batch_size, l2_lambda=self.l2_lambda)
+                neuron.apply_accumulated_gradients(self.eta, batch_size, l2_lambda=self.l2_lambda, algorithm=self.algorithm, **self.kwargs)
 
     # backprop implementation
     def backward(self, error_signals, accumulate=False):
