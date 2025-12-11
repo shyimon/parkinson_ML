@@ -17,3 +17,5 @@ src/__pycache__/
 src/img/
 .gitignore
 src/img/network
+img/cup_plot.png
+img/cup_network.png
