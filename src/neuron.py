@@ -106,7 +106,13 @@ class Neuron:
             
             self.update_weights_rprop(batch_size, eta_plus, eta_minus, delta_min, delta_max)
             self.reset_grad_accum() # Resetta gli accumuli dell'aggiornamento dei pesi per il prossimo batch
-    
+        
+        elif algorithm == 'quickprop':
+            mu = kwargs.get('mu', 1.75)
+            decay = kwargs.get('decay', -0.0001)
+            
+            self.update_weights_quickprop(batch_size, eta, mu, decay)
+            self.reset_grad_accum() # Resetta gli accumuli dell'aggiornamento dei pesi per il prossimo batch
 
     def update_weights(self, eta, l2_lambda=0.00):
         self.weights += eta * (self.delta * self.inputs - l2_lambda * self.weights)
@@ -165,3 +171,61 @@ class Neuron:
             self.bias += bias_delta
             self.prev_bias_grad = curr_grad_b
             self.prev_bias_update = bias_delta
+    
+    def update_weights_quickprop(self, batch_size, eta, mu=1.75, decay=-0.0001):
+        """
+        Implementazione dell'algoritmo Quickprop per l'aggiornamento dei pesi.
+        """
+        # Normalizzazione del gradiente per evitare dipendenza dalla dimensione del batch
+        curr_grad_w = self.weight_grad_accum / batch_size
+        curr_grad_b = self.bias_grad_accum / batch_size
+
+        # Aggiornamento pesi 
+        for i in range(len(self.weights)):
+            grad_descent = curr_grad_w[i]
+            current_slope = -grad_descent + (decay * self.weights[i]) # Aggiunta del termine di weight decay per evitare che i pesi facciano passi troppo grandi
+            prev_slope = self.prev_weight_grad[i]
+            prev_step= self.prev_weight_update[i]
+            
+            step = 0.0
+            # Ignition
+            if abs(prev_step) < 1e-10: # Se il passo precedente è molto piccolo (ossia siamo all'inizio del training)
+                step = - eta * current_slope # Si usa la discesa del gradiente standard per generare il primo passo per arrivare al secondo punto (il primo è l'inizializzazione)
+            else:
+                grad_diff = prev_slope - current_slope
+                if abs(grad_diff) < 1e-10:
+                    step = - eta * current_slope
+                else:
+                    step = (current_slope / grad_diff) * prev_step # Calcolo del passo quickprop!!
+                    max_step = mu * abs(prev_step) # Calcolo del passo massimo consentito per evitare salti troppo grandi
+                    if abs(step) > max_step:
+                        step = max_step*np.sign(step) # Ignoriamo la grandezza suggerita dalla formula e impostiamo la grandezza al limite massimo consentito mantenendo la direzione originale (sign)
+                    if np.sign(step) == np.sign(current_slope): # Se il passo calcolato ha la stessa direzione del gradiente (ossia si va nella direzione opposta alla discesa del gradiente)
+                        step = - eta * current_slope # Si forza l'aggiornamento a seguire la discesa del gradiente
+                        
+            self.weights[i] += step # Aggiornamento effettivo del peso
+            self.prev_weight_grad[i] = current_slope # Memorizzazione del gradiente corrente per il prossimo confronto perchè questo valore al prossimo passo diventerà t-1
+            self.prev_weight_update[i] = step # Memorizzazione dell'ultimo aggiornamento del peso
+    
+        # Aggiornamento bias con lo stesso metodo
+        current_slope_b = - curr_grad_b 
+        prev_slope_b = self.prev_bias_grad
+        
+        step_b = 0.0
+        if abs(self.prev_bias_update) < 1e-10:
+            step_b = - eta * current_slope_b
+        else:
+            slope_diff_b = prev_slope_b - current_slope_b
+            if abs(slope_diff_b) < 1e-10:
+                step_b = - eta * current_slope_b
+            else:
+                step_b = (current_slope_b / slope_diff_b) * self.prev_bias_update
+                if abs(step_b) > mu * abs(self.prev_bias_update):
+                    step_b = mu * abs(self.prev_bias_update) * np.sign(step_b)
+                if np.sign(step_b) == np.sign(current_slope_b):
+                    step_b = - eta * current_slope_b
+        
+        self.bias += step_b # Aggiornamento effettivo del bias
+        # Ricostruzione della memoria
+        self.prev_bias_grad = curr_grad_b
+        self.prev_bias_update = step_b 
