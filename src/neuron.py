@@ -98,8 +98,10 @@ class Neuron:
         eta = kwargs.get("eta", 0.1)
         batch_size = kwargs.get("batch_size", 1)
         algorithm = kwargs.get("algorithm", 'sgd')
+        
         if algorithm == 'sgd':
             l2_lambda = kwargs.get('l2_lambda', 0.0)
+            momentum = kwargs.get('momentum', 0.0)
             grad_w = self.weight_grad_accum / batch_size
             grad_b = self.bias_grad_accum / batch_size         
             self.weights += eta * (grad_w - l2_lambda * self.weights)

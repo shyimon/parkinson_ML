@@ -20,6 +20,7 @@ class NeuralNetwork:
         self.decay = kwargs.get("decay", 0.001)
         self.loss_history = {"training": [], "test": []}
         self.layers = []
+        self.momentum = kwargs.get("momentum", 0.0) # Implementazione momentum
 
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
                 activation_function_type=self.activation_type, is_output_neuron=False, weight_initializer=self.weight_initializer) 
@@ -57,7 +58,13 @@ class NeuralNetwork:
         """Applica gradienti accumulati a tutti i neuroni"""
         for l in range(1, len(self.layers)):
             for neuron in self.layers[l]:
-                neuron.apply_accumulated_gradients(eta=self.eta, batch_size=batch_size, l2_lambda=self.l2_lambda, algorithm=self.algorithm, eta_plus=self.eta_plus, eta_minus=self.eta_minus)
+                neuron.apply_accumulated_gradients(eta=self.eta, 
+                                                   batch_size=batch_size, 
+                                                   l2_lambda=self.l2_lambda, 
+                                                   algorithm=self.algorithm, 
+                                                   eta_plus=self.eta_plus, 
+                                                   eta_minus=self.eta_minus,
+                                                   momentum=self.momentum)
 
     # backprop implementation
     def backward(self, error_signals, accumulate=False):
