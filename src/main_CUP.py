@@ -20,7 +20,7 @@ network_structure.append(cup_test_y.shape[1])
 eta = 0.5
 
 print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0005)
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", alorithm="sgd", activation_type="sigmoid", l2_lambda=0.0005)
 print("Start training...")
 net.fit(cup_train_X, cup_test_X, cup_train_y, cup_test_y, epochs=400, batch_size=25)
 

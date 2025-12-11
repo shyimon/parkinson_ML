@@ -7,8 +7,9 @@ class NeuralNetwork:
     # Constructor
     # network_structure is the number of neurons in input, hidden layers
     # and output, expressed as an array. For example [6, 2, 2, 1].
-    def __init__(self, network_structure, eta=0.1, loss_type="half_mse", l2_lambda=0.00, algorithm='sgd', **kwargs): # Modificato il costruttore per accettare diversi tipi di loss
+    def __init__(self, network_structure, eta=0.1, loss_type="half_mse", l2_lambda=0.00, algorithm='sgd', activation_type="sigmoid", **kwargs): # Modificato il costruttore per accettare diversi tipi di loss
         self.eta = eta
+        self.activation_type = activation_type
         self.l2_lambda = l2_lambda
         self.loss_history = {"training": [], "test": []}
         self.loss_type = loss_type
@@ -77,9 +78,8 @@ class NeuralNetwork:
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
-    def fit(self, X, X_test, y, y_test, epochs=1000, batch_size=1, verbose=True):
-        X = np.array(X, dtype=float)
-        y = np.array(y, dtype=float)
+    def fit(self, X, X_test, y, y_test, epochs=1000, batch_size=1, patience=10, verbose=True):
+
 
         for epoch in range(epochs):
             total_loss = 0.0
