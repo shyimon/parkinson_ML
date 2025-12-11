@@ -113,8 +113,9 @@ class Neuron:
             eta_minus = kwargs.get('eta_minus', 0.5)
             delta_min = kwargs.get('delta_min', 1e-6)
             delta_max = kwargs.get('delta_max', 50.0)
+            l2_lambda = kwargs.get('l2_lambda', 0.0)
             
-            self.update_weights_rprop(batch_size, eta_plus, eta_minus, delta_min, delta_max)
+            self.update_weights_rprop(batch_size, eta_plus, eta_minus, delta_min, delta_max, l2_lambda)
             self.reset_grad_accum() # Resetta gli accumuli dell'aggiornamento dei pesi per il prossimo batch
         
         elif algorithm == 'quickprop':
@@ -128,7 +129,7 @@ class Neuron:
         self.weights += eta * (self.delta * self.inputs - l2_lambda * self.weights)
         self.bias += eta * self.delta
     
-    def update_weights_rprop(self, batch_size, eta_plus=1.2, eta_minus=0.5, delta_min=1e-6, delta_max=50.0):
+    def update_weights_rprop(self, batch_size, eta_plus=1.2, eta_minus=0.5, delta_min=1e-6, delta_max=50.0, l2_lambda=0.0):
         """
         Implementazione dell'algoritmo RPROP per l'aggiornamento dei pesi.
         """
@@ -136,6 +137,9 @@ class Neuron:
         curr_grad_w = self.weight_grad_accum / batch_size
         curr_grad_b = self.bias_grad_accum / batch_size
 
+        if l2_lambda > 0.0: # Penalizzazione dei pesi grandi tramite L2 regularization
+            curr_grad_w -= l2_lambda * self.weights
+            
         # Aggiornamento pesi 
         for i in range(len(self.weights)):
             # Prodotto dei gradienti (t-1) * (t)
