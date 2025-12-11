@@ -16,16 +16,11 @@ class NeuralNetwork:
         self.eta_plus = kwargs.get("eta_plus", 1.2)
         self.eta_minus = kwargs.get("eta_minus", 0.5)
         self.weight_initializer = kwargs.get("weight_initializer", "def")
-        
-        # self.eta = eta
-        # self.activation_type = activation_type
-        # self.l2_lambda = l2_lambda
+        self.mu = kwargs.get("mu", 1.75)
+        self.decay = kwargs.get("decay", 0.001)
         self.loss_history = {"training": [], "test": []}
-        # self.loss_type = loss_type
-        # self.algorithm = algorithm
-        # self.eta_plus = eta_plus
-        # self.eta_minus = eta_minus
         self.layers = []
+
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
                 activation_function_type=self.activation_type, is_output_neuron=False, weight_initializer=self.weight_initializer) 
                 for j in range(network_structure[0])])
