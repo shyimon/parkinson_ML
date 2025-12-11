@@ -16,6 +16,13 @@ network_structure.append(6)  # Hidden layer with 4 neurons
 network_structure.append(1)  # Output layer with 1 neuron
 eta = 0.5        # Learning rate
 
+print(X_train_normalized.shape)
+print(y_train.shape)
+
+print(X_test_normalized.shape)
+print(y_test.shape)
+
+
 # Network is created and trained
 print("Creating neural network with huber loss...")
 net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="huber", l2_lambda=0.00, algorithm='sgd', eta_plus=1.2, eta_minus=0.5)

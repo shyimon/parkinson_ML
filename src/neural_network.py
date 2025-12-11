@@ -16,12 +16,12 @@ class NeuralNetwork:
         self.kwargs = kwargs
         self.layers = []
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
-                activation_function_type="sigmoid", is_output_neuron=False) 
+                activation_function_type=self.activation_type, is_output_neuron=False) 
                 for j in range(network_structure[0])])
         
         for i in range(len(network_structure) - 1):
             self.layers.append([neuron.Neuron(num_inputs=network_structure[i], 
-                        index_in_layer=j, activation_function_type="sigmoid", 
+                        index_in_layer=j, activation_function_type=self.activation_type, 
                         is_output_neuron=(i==len(network_structure)-2)) 
                         for j in range(network_structure[i + 1])])
 
@@ -34,18 +34,12 @@ class NeuralNetwork:
     def forward(self, x):
         for l in range(len(self.layers) - 1):
             x = [n.feed_neuron(x) for n in self.layers[l + 1]]
-        return x
+        return np.array(x, dtype="float")
 
     # streamlines and encapsulates the forwarding of multiple examples
     def predict(self, X):
-        preds = []
-        for xi in X:
-            out = self.forward(xi)
-            if isinstance(out, (list, np.ndarray)):
-                preds.append(float(out[0]))
-            else:
-                preds.append(float(out))
-        return np.array(preds)
+        preds = [self.forward(xi) for xi in X]
+        return np.vstack(preds)
 
     def _reset_gradients(self):
         """Resetta tutti gli accumulatori di gradienti"""
@@ -113,7 +107,7 @@ class NeuralNetwork:
                     yi = y_shuffled[i]
 
                     outputs = self.forward(xi)
-                    y_pred = outputs[0]
+                    y_pred = outputs
 
                     batch_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
 
@@ -124,28 +118,17 @@ class NeuralNetwork:
                 self._apply_accumulated_gradients(batch_size=current_batch_size)
                 total_loss += batch_loss
 
-            avg_loss = total_loss / len(X)
+            avg_loss = np.mean(total_loss) / len(X)
             self.loss_history["training"].append(avg_loss)
 
             # Test loss
             y_pred_test = self.predict(X_test)
-            test_loss = np.sum(self.compute_loss(y_test, y_pred_test.flatten(), loss_type=self.loss_type))
+            test_loss = np.sum(self.compute_loss(y_test, y_pred_test, loss_type=self.loss_type))
             avg_test_loss = test_loss / len(y_test)
             self.loss_history["test"].append(avg_test_loss)
 
             if epoch % 25 == 0 and verbose:
-                print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}")
-
-    # a method to save the losses of the training and test sets as a plot
-    def save_plots(self, path):
-        plt.plot(self.loss_history["training"], label='Training Loss')
-        plt.plot(self.loss_history["test"], label='Test Loss')
-        plt.legend()
-        plt.ylim(0, max(max(self.loss_history["training"]), max(self.loss_history["test"])) * 1.1)
-        plt.savefig(path)
-
-    def draw_network(self, path):
-        utils.draw_network(self.layers, path)
+                print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nTest Loss: {avg_test_loss:.4f}\n")
         
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
         """
@@ -189,6 +172,13 @@ class NeuralNetwork:
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
     
-    
+    # a method to save the losses of the training and test sets as a plot
+    def save_plots(self, path):
+        plt.plot(self.loss_history["training"], label='Training Loss')
+        plt.plot(self.loss_history["test"], label='Test Loss')
+        plt.legend()
+        plt.ylim(0, max(max(self.loss_history["training"]), max(self.loss_history["test"])) * 1.1)
+        plt.savefig(path)
 
-   
+    def draw_network(self, path):
+        utils.draw_network(self.layers, path)
