@@ -6,22 +6,15 @@ import neural_network as nn
 X_train, y_train, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
 
 # Normalization
-# X_train_normalized = data.normalize(X_train, 0, 1)
-# X_test_normalized = data.normalize(X_test, 0, 1)
+# X_train_normalized = data.normalize(X_train, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
+# X_test_normalized = data.normalize(X_test, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
 X_train_normalized = X_train
 X_test_normalized = X_test
 
 network_structure = [X_train_normalized.shape[1]]
-network_structure.append(6)  # Hidden layer with 4 neurons
+network_structure.append(4)  # Hidden layer with 4 neurons
 network_structure.append(1)  # Output layer with 1 neuron
-eta = 0.5        # Learning rate
-
-print(X_train_normalized.shape)
-print(y_train.shape)
-
-print(X_test_normalized.shape)
-print(y_test.shape)
-
+eta = 0.05        # Learning rate
 
 # Network is created and trained
 print("Creating neural network with huber loss...")

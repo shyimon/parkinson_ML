@@ -6,14 +6,21 @@ class Neuron:
     def __init__(self, num_inputs, index_in_layer, is_output_neuron=False, activation_function_type="tanh", weight_initializer='xavier', bias_initializer='uniform'):
         self.index_in_layer = index_in_layer
         self.is_output_neuron = is_output_neuron
-        self.weights = np.random.uniform(-0.5, 0.5, size=num_inputs)
-        self.bias = np.random.uniform(-0.5, 0.5)
         self.activation_function_type = activation_function_type
         self.net = 0.0
         self.output = 0.0
         self.delta = 0.0
         self.inputs = []
         self.attached_neurons = []
+
+        limit = 1 / math.sqrt(num_inputs) if num_inputs > 0 else 0.2
+
+        if weight_initializer == 'xavier':
+            self.weights = np.random.uniform(-limit, limit, size=num_inputs)
+            self.bias = 0.0 
+        else:
+            self.weights = np.random.uniform(-0.2, 0.2, size=num_inputs)
+            self.bias = np.random.uniform(-0.2, 0.2)
 
         #per mini-batch gradient accumulation
         self.prev_weight_grad = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)
@@ -48,11 +55,12 @@ class Neuron:
     # Activation function's derivative gets called dynamically (string based) based on how the neuron was initialized
     def activation_deriv(self, input):
         if self.activation_function_type == "sigmoid":
-            return input * (1 - input) + 0.1 # Aggiunta del valore 0.1 per evitare che l'algoritmo si blocchi in caso di derivata nulla
+            deriv = input * (1 - input)
         elif self.activation_function_type == "tanh":
-            return 1 - np.square(input) + 0.1
+            deriv = 1 - np.square(input)
         else:
             raise ValueError(f"The specified activation function {self.activation_function_type} is not implemented as of yet.")
+        return np.maximum(deriv, 1e-8)
 
     # a single example is fed to the neuron. The sum and then whatever activation function was selected are called
     def feed_neuron(self, inputs):
@@ -84,10 +92,12 @@ class Neuron:
         self.weight_grad_accum.fill(0.0)
         self.bias_grad_accum = 0.0
     
-    def apply_accumulated_gradients(self, eta, batch_size, algorithm='sgd', **kwargs):
+    def apply_accumulated_gradients(self, **kwargs):
         
         """Applica gradienti accumulati (media del batch) a seconda dell'algoritmo scelto"""
-        
+        eta = kwargs.get("eta", 0.1)
+        batch_size = kwargs.get("batch_size", 1)
+        algorithm = kwargs.get("algorithm", 'sgd')
         if algorithm == 'sgd':
             l2_lambda = kwargs.get('l2_lambda', 0.0)
             grad_w = self.weight_grad_accum / batch_size

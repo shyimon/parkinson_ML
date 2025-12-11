@@ -7,23 +7,33 @@ class NeuralNetwork:
     # Constructor
     # network_structure is the number of neurons in input, hidden layers
     # and output, expressed as an array. For example [6, 2, 2, 1].
-    def __init__(self, network_structure, eta=0.1, loss_type="half_mse", l2_lambda=0.00, algorithm='sgd', activation_type="sigmoid", **kwargs): # Modificato il costruttore per accettare diversi tipi di loss
-        self.eta = eta
-        self.activation_type = activation_type
-        self.l2_lambda = l2_lambda
+    def __init__(self, network_structure, **kwargs):
+        self.eta = kwargs.get("eta", 0.1)
+        self.loss_type = kwargs.get("loss_type", "half_mse")
+        self.l2_lambda = kwargs.get("l2_lambda", 0.00)
+        self.algorithm = kwargs.get("algorithm", "sgd")
+        self.activation_type = kwargs.get("activation_type", "sigmoid")
+        self.eta_plus = kwargs.get("eta_plus", 1.2)
+        self.eta_minus = kwargs.get("eta_minus", 0.5)
+        self.weight_initializer = kwargs.get("weight_initializer", "def")
+        
+        # self.eta = eta
+        # self.activation_type = activation_type
+        # self.l2_lambda = l2_lambda
         self.loss_history = {"training": [], "test": []}
-        self.loss_type = loss_type
-        self.algorithm = algorithm
-        self.kwargs = kwargs
+        # self.loss_type = loss_type
+        # self.algorithm = algorithm
+        # self.eta_plus = eta_plus
+        # self.eta_minus = eta_minus
         self.layers = []
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
-                activation_function_type=self.activation_type, is_output_neuron=False) 
+                activation_function_type=self.activation_type, is_output_neuron=False, weight_initializer=self.weight_initializer) 
                 for j in range(network_structure[0])])
         
         for i in range(len(network_structure) - 1):
             self.layers.append([neuron.Neuron(num_inputs=network_structure[i], 
                         index_in_layer=j, activation_function_type=self.activation_type, 
-                        is_output_neuron=(i==len(network_structure)-2)) 
+                        is_output_neuron=(i==len(network_structure)-2), weight_initializer=self.weight_initializer) 
                         for j in range(network_structure[i + 1])])
 
         for l in range(len(self.layers) - 1):
@@ -52,7 +62,7 @@ class NeuralNetwork:
         """Applica gradienti accumulati a tutti i neuroni"""
         for l in range(1, len(self.layers)):
             for neuron in self.layers[l]:
-                neuron.apply_accumulated_gradients(self.eta, batch_size, l2_lambda=self.l2_lambda, algorithm=self.algorithm, **self.kwargs)
+                neuron.apply_accumulated_gradients(eta=self.eta, batch_size=batch_size, l2_lambda=self.l2_lambda, algorithm=self.algorithm, eta_plus=self.eta_plus, eta_minus=self.eta_minus)
 
     # backprop implementation
     def backward(self, error_signals, accumulate=False):
@@ -80,7 +90,7 @@ class NeuralNetwork:
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
     def fit(self, X, X_test, y, y_test, epochs=1000, batch_size=1, patience=10, verbose=True):
 
-
+        patience_level = patience
         for epoch in range(epochs):
             total_loss = 0.0
 
@@ -109,7 +119,7 @@ class NeuralNetwork:
                     outputs = self.forward(xi)
                     y_pred = outputs
 
-                    batch_loss += self.compute_loss(yi, y_pred, loss_type=self.loss_type)
+                    batch_loss += np.sum(self.compute_loss(yi, y_pred, loss_type=self.loss_type))
 
                     err = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
                     self.backward(err, accumulate=True)
@@ -126,6 +136,15 @@ class NeuralNetwork:
             test_loss = np.sum(self.compute_loss(y_test, y_pred_test, loss_type=self.loss_type))
             avg_test_loss = test_loss / len(y_test)
             self.loss_history["test"].append(avg_test_loss)
+
+            if epoch >= patience:
+                if self.loss_history["test"][epoch] >= self.loss_history["test"][epoch - 1] * 0.995:
+                    patience_level -= 1
+                else:
+                    patience_level = patience
+                if patience_level == 0:       
+                    print(f"Patience ended. Last epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nTest Loss: {avg_test_loss:.4f}\n")
+                    break
 
             if epoch % 25 == 0 and verbose:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nTest Loss: {avg_test_loss:.4f}\n")

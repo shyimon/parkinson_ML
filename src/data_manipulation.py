@@ -16,7 +16,6 @@ def return_monk1(dataset_shuffle=False, one_hot=False):
         monk1_test = monk1_test.sample(frac=1).reset_index(drop=True)
 
     if one_hot:
-        categorical_cols = ['a1', 'a2', 'a3', 'a4', 'a5', 'a6']
         monk1_train = pd.get_dummies(monk1_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], dtype=int)
         monk1_test = pd.get_dummies(monk1_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], dtype=int)
 
@@ -41,18 +40,12 @@ def return_monk1(dataset_shuffle=False, one_hot=False):
 
 
 def return_monk2(dataset_shuffle=True, one_hot=False):
-    try:
-        monk2_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.train'
-        monk2_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.test'
-        column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
+    monk2_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.train'
+    monk2_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.test'
+    column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
 
-        monk2_train = pd.read_csv(monk2_train_url, header=None, names=column_names, sep="\s+")
-        monk2_test = pd.read_csv(monk2_test_url, header=None, names=column_names, sep="\s+")
-
-        print("MONK2 caricato da UCI")
-    except Exception as e:
-        print(f"Errore nel caricamento da URL: {e}")
-        print("Tento di caricare da file locali...")
+    monk2_train = pd.read_csv(monk2_train_url, header=None, names=column_names, sep="\\s+")
+    monk2_test = pd.read_csv(monk2_test_url, header=None, names=column_names, sep="\\s+")
 
     if dataset_shuffle:
         monk2_train = monk2_train.sample(frac=1).reset_index(drop=True)
@@ -61,6 +54,18 @@ def return_monk2(dataset_shuffle=True, one_hot=False):
     if one_hot:
         monk2_train = pd.get_dummies(monk2_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
         monk2_test = pd.get_dummies(monk2_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+    
+        #allineo le colonne
+        all_columns = sorted(set(monk2_train.columns).union(set(monk2_test.columns)))
+        for col in all_columns:
+            if col not in monk2_train.columns:
+                monk2_train[col] = 0
+            if col not in monk2_test.columns:
+                monk2_test[col] = 0
+
+        # riordino
+        monk2_train = monk1_train[all_columns]
+        monk2_test = monk1_test[all_columns]
 
     monk2_train_X = monk2_train.drop(columns=['class', 'id']).to_numpy()
     monk2_train_y = monk2_train['class'].to_numpy().reshape(-1, 1)
@@ -85,6 +90,18 @@ def return_monk3(dataset_shuffle=True, one_hot=False):
     if one_hot:
         monk3_train = pd.get_dummies(monk3_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
         monk3_test = pd.get_dummies(monk3_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
+
+        #allineo le colonne
+        all_columns = sorted(set(monk3_train.columns).union(set(monk3_test.columns)))
+        for col in all_columns:
+            if col not in monk3_train.columns:
+                monk3_train[col] = 0
+            if col not in monk3_test.columns:
+                monk3_test[col] = 0
+
+        # riordino
+        monk3_train = monk3_train[all_columns]
+        monk3_test = monk3_test[all_columns]
         
     monk3_train_X = monk3_train.drop(columns=['class', 'id']).to_numpy()
     monk3_train_y = monk3_train['class'].to_numpy().reshape(-1, 1)
@@ -99,15 +116,15 @@ def return_CUP(dataset_shuffle=True, train_size=250, test_size=250):
     cup = pd.read_csv("data/ML-CUP25-TR.csv", comment="#", names=cols)
     pd.set_option("display.precision", 3)
 
-    cup_train_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()[0:train_size-1]
-    cup_train_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()[0:train_size-1]
-    cup_test_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()[train_size:train_size+test_size-1]
-    cup_test_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()[train_size:train_size+test_size-1]
+    cup_train_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()[0:train_size]
+    cup_train_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()[0:train_size]
+    cup_test_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()[train_size:train_size+test_size]
+    cup_test_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()[train_size:train_size+test_size]
 
     return cup_train_X, cup_train_y, cup_test_X, cup_test_y
     
 # Linear normalization method between a max and min value passed as parameters 
-def normalize(X, min, max):
-    if (X.max(axis=0) - X.min(axis=0)).any == 0:
-        raise ZeroDivisionError("Division by zero prevented: the minimum and maximum elements for the training examples are equal, invalid dataset.")
-    return (X - X.min(axis=0)) / (X.max(axis=0) - X.min(axis=0)) * (max - min) + min
+def normalize(X, min, max, x_min, x_max):
+    diff = x_max - x_min
+    diff[diff == 0] = 1e-9
+    return (X - x_min) / diff * (max - min) + min
