@@ -85,22 +85,27 @@ class NeuralNetwork:
                     n.accumulate_gradients()
                 else:
                     n.update_weights(self.eta, l2_lambda=self.l2_lambda)
-                    
+        
     # core training method.
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
-    def fit(self, X, X_test, y, y_test, epochs=1000, batch_size=1, patience=10, verbose=True):
+    def fit(self, X_train, y_train, X_val, y, y_val, epochs=1000, batch_size=1, patience=10, verbose=True):
 
         patience_level = patience
+
+         # reset history
+        self.loss_history = {"training": [], "val": []}
+
         for epoch in range(epochs):
             total_loss = 0.0
 
-            # Shuffle every epoch
-            indices = np.arange(len(X))
-            np.random.shuffle(indices)
-            X_shuffled = X[indices]
-            y_shuffled = y[indices]
+            #shuffle every epoch
+            for epoch in range(epochs):
+                indices = np.arange(len(X))
+                np.random.shuffle(indices)
+                X_shuffled = X[indices]
+                y_shuffled = y[indices]
 
             # Unified batch loop
             for start_idx in range(0, len(X), batch_size):
@@ -118,35 +123,38 @@ class NeuralNetwork:
                     xi = X_shuffled[i]
                     yi = y_shuffled[i]
 
-                    outputs = self.forward(xi)
-                    y_pred = outputs
-
+                    y_pred = self.forward(xi)
                     batch_loss += np.sum(self.compute_loss(yi, y_pred, loss_type=self.loss_type))
 
                     err = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
                     self.backward(err, accumulate=True)
 
-                # Apply accumulated gradient once
+                #apply accumulated gradient once
                 self._apply_accumulated_gradients(batch_size=current_batch_size)
                 total_loss += batch_loss
-
-            avg_loss = np.mean(total_loss) / len(X)
+            
+            #Training loss (media per esempio)
+            avg_loss = total_loss / len(X_train)
             self.loss_history["training"].append(avg_loss)
 
-            # Test loss
-            y_pred_test = self.predict(X_test)
-            test_loss = np.sum(self.compute_loss(y_test, y_pred_test, loss_type=self.loss_type))
-            avg_test_loss = test_loss / len(y_test)
-            self.loss_history["test"].append(avg_test_loss)
+            #Validation loss (non tocca i pesi)
+            y_pred_val = self.predict(X_val)
+            val_loss = np.sum(self.compute_loss(y_val, y_pred_val, loss_type=self.loss_type))
+            avg_val_loss = val_loss / len(y_val)
+            self.loss_history["val"].append(avg_val_loss)
 
+            #early stopping su validation
             if epoch >= patience:
-                if self.loss_history["test"][epoch] >= self.loss_history["test"][epoch - 1] * 0.995:
+                if self.loss_history["val"][epoch] >= self.loss_history["val"][epoch - 1] * 0.995:
                     patience_level -= 1
                 else:
                     patience_level = patience
-                if patience_level == 0:       
-                    print(f"Patience ended. Last epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nTest Loss: {avg_test_loss:.4f}\n")
-                    break
+                if patience_level == 0:
+                    if verbose:
+                        print(f"Early stopping. Last epoch {epoch}, Train Loss: {avg_loss:.4f}, "
+                          f"Val Loss: {avg_val_loss:.4f}, Batch size: {batch_size}")
+                break       
+                    
 
             if epoch % 25 == 0 and verbose:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nTest Loss: {avg_test_loss:.4f}\n")
@@ -162,7 +170,9 @@ class NeuralNetwork:
         elif loss_type == "mae":
             return np.abs(error)
         elif loss_type == "log_cosh":
-            return np.log(np.cosh(error))
+            z = y_pred - y_true
+            a = np.abs(z)
+            return a + np.log1p(np.exp(-2.0 * a)) - np.log(2.0)
         elif loss_type == "huber":
             delta = 1.0
             is_small_error = np.abs(error) <= delta
