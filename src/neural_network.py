@@ -155,15 +155,16 @@ class NeuralNetwork:
         """
         Calcola la loss in base al tipo specificato.
         """
+        error = y_pred - y_true
+
         if loss_type == "half_mse":
-            return 0.5 * (y_true - y_pred) ** 2
+            return 0.5 * error ** 2
         elif loss_type == "mae":
-            return np.abs(y_true - y_pred)
+            return np.abs(error)
         elif loss_type == "log_cosh":
-            return np.log(np.cosh(y_pred - y_true))
+            return np.log(np.cosh(error))
         elif loss_type == "huber":
             delta = 1.0
-            error = y_true - y_pred
             is_small_error = np.abs(error) <= delta
             squared_loss = 0.5 * (error ** 2)
             linear_loss = delta * (np.abs(error) - 0.5 * delta)
@@ -175,7 +176,7 @@ class NeuralNetwork:
         """
         Calcola il segnale di errore da passare al neurone di output in base al tipo di loss specificato
         """
-        error = y_true - y_pred 
+        error = y_pred - y_true
         
         if loss_type == "half_mse":
             return error
