@@ -3,12 +3,13 @@ import data_manipulation as data
 import neural_network as nn
 
 
-X_train, y_train, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
+X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
 
 # Normalization
 # X_train_normalized = data.normalize(X_train, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
 # X_test_normalized = data.normalize(X_test, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
 X_train_normalized = X_train
+X_val_normalized = X_val
 X_test_normalized = X_test
 
 network_structure = [X_train_normalized.shape[1]]
@@ -18,9 +19,9 @@ eta = 0.05        # Learning rate
 
 # Network is created and trained
 print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=0.5, loss_type="huber", l2_lambda=0.0005, algorithm='rprop', activation_type="sigmoid", eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.0001, weight_initialzer="def", momentum=0.9)
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0005, algorithm="sgd", activation_type="sigmoid", eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.0001, weight_initialzer="def", momentum=0.9)
 print("Start training with rprop...")
-net.fit(X_train_normalized, X_test_normalized, y_train, y_test, epochs=400, batch_size=20, patience=20)
+net.fit(X_train_normalized, y_train, X_val_normalized, y_val, epochs=400, batch_size=20, patience=2000)
 
 # Accuracy for the training set
 print("\nCalculating accuracy...")

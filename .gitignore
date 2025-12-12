@@ -19,3 +19,5 @@ src/img/
 src/img/network
 img/cup_plot.png
 img/cup_network.png
+.venv/
+.venv/pyvenv.cfg

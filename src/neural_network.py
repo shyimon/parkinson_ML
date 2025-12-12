@@ -18,7 +18,7 @@ class NeuralNetwork:
         self.weight_initializer = kwargs.get("weight_initializer", "def")
         self.mu = kwargs.get("mu", 1.75)
         self.decay = kwargs.get("decay", 0.001)
-        self.loss_history = {"training": [], "test": []}
+        self.loss_history = {"training": [], "validation": []}
         self.layers = []
         self.momentum = kwargs.get("momentum", 0.0) # Implementazione momentum
 
@@ -90,27 +90,20 @@ class NeuralNetwork:
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
-    def fit(self, X_train, y_train, X_val, y, y_val, epochs=1000, batch_size=1, patience=10, verbose=True):
+    def fit(self, X_train, y_train, X_val, y_val, epochs=1000, batch_size=1, patience=10, verbose=True):
 
         patience_level = patience
 
          # reset history
-        self.loss_history = {"training": [], "val": []}
+        self.loss_history = {"training": [], "validation": []}
 
         for epoch in range(epochs):
             total_loss = 0.0
 
-            #shuffle every epoch
-            for epoch in range(epochs):
-                indices = np.arange(len(X))
-                np.random.shuffle(indices)
-                X_shuffled = X[indices]
-                y_shuffled = y[indices]
-
             # Unified batch loop
-            for start_idx in range(0, len(X), batch_size):
+            for start_idx in range(0, len(X_train), batch_size):
 
-                end_idx = min(start_idx + batch_size, len(X))
+                end_idx = min(start_idx + batch_size, len(X_train))
                 current_batch_size = end_idx - start_idx
 
                 # Reset accumulators
@@ -120,8 +113,8 @@ class NeuralNetwork:
 
                 # Accumulate gradients inside the batch
                 for i in range(start_idx, end_idx):
-                    xi = X_shuffled[i]
-                    yi = y_shuffled[i]
+                    xi = X_train[i]
+                    yi = y_train[i]
 
                     y_pred = self.forward(xi)
                     batch_loss += np.sum(self.compute_loss(yi, y_pred, loss_type=self.loss_type))
@@ -141,11 +134,11 @@ class NeuralNetwork:
             y_pred_val = self.predict(X_val)
             val_loss = np.sum(self.compute_loss(y_val, y_pred_val, loss_type=self.loss_type))
             avg_val_loss = val_loss / len(y_val)
-            self.loss_history["val"].append(avg_val_loss)
+            self.loss_history["validation"].append(avg_val_loss)
 
             #early stopping su validation
             if epoch >= patience:
-                if self.loss_history["val"][epoch] >= self.loss_history["val"][epoch - 1] * 0.995:
+                if self.loss_history["validation"][epoch] >= self.loss_history["validation"][epoch - 1] * 0.99:
                     patience_level -= 1
                 else:
                     patience_level = patience
@@ -157,7 +150,7 @@ class NeuralNetwork:
                     
 
             if epoch % 25 == 0 and verbose:
-                print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nTest Loss: {avg_test_loss:.4f}\n")
+                print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nValidation Loss: {avg_val_loss:.4f}\n")
         
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
         """
@@ -207,9 +200,9 @@ class NeuralNetwork:
     # a method to save the losses of the training and test sets as a plot
     def save_plots(self, path):
         plt.plot(self.loss_history["training"], label='Training Loss')
-        plt.plot(self.loss_history["test"], label='Test Loss')
+        plt.plot(self.loss_history["validation"], label='Validation Loss')
         plt.legend()
-        plt.ylim(0, max(max(self.loss_history["training"]), max(self.loss_history["test"])) * 1.1)
+        plt.ylim(0, max(max(self.loss_history["training"]), max(self.loss_history["validation"])) * 1.1)
         plt.savefig(path)
 
     def draw_network(self, path):

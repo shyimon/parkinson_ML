@@ -81,8 +81,8 @@ def return_monk2(dataset_shuffle=True, one_hot=False):
     split = int(0.5 * idx)
     train_idx = idx[:split]
     val_idx = idx[split:]
-    monk2_train = monk2_train_X[train_idx]
-    monk2_val = monk2_train_X[val_idx]
+    monk2_train = monk2_train_X[:split]
+    monk2_val = monk2_train_X[split:]
     return monk2_train, monk2_val, monk2_train_y, monk2_test_X, monk2_test_y
 
 def return_monk3(dataset_shuffle=True, one_hot=False):
@@ -120,11 +120,11 @@ def return_monk3(dataset_shuffle=True, one_hot=False):
 
     idx = len(monk3_train_X)
     split = int(0.5 * idx)
-    train_idx = idx[:split]
-    val_idx = idx[split:]
-    monk3_train = monk3_train_X[train_idx]
-    monk3_val = monk3_train_X[val_idx]
-    return monk3_train, monk3_val, monk3_train_y, monk3_test_X, monk3_test_y
+    monk3_val_X = monk3_train_X[split:]
+    monk3_train_X = monk3_train_X[:split]
+    monk3_val_y = monk3_train_y[split:]
+    monk3_train_y = monk3_train_y[:split]
+    return monk3_train_X, monk3_train_y, monk3_val_X, monk3_val_y, monk3_test_X, monk3_test_y
 
 
 def return_CUP(dataset_shuffle=True, train_size=250, test_size=250):
