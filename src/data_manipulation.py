@@ -35,13 +35,14 @@ def return_monk1(dataset_shuffle=False, one_hot=False):
     monk1_train_y = monk1_train['class'].to_numpy().reshape(-1, 1)
     monk1_test_X = monk1_test.drop(columns=['class', 'id']).to_numpy()
     monk1_test_y = monk1_test['class'].to_numpy().reshape(-1, 1)
+
     idx = len(monk1_train_X)
     split = int(0.5 * idx)
-    train_idx = idx[:split]
-    val_idx = idx[split:]
-    monk1_train = monk1_train_X[train_idx]
-    monk1_val = monk1_train_X[val_idx]
-    return monk1_train, monk1_val, monk1_train_y, monk1_test_X, monk1_test_y
+    monk1_val_X = monk1_train_X[split:]
+    monk1_train_X = monk1_train_X[:split]
+    monk1_val_y = monk1_train_y[split:]
+    monk1_train_y = monk1_train_y[:split]
+    return monk1_train_X, monk1_train_y, monk1_val_X, monk1_val_y, monk1_test_X, monk1_test_y
 
 
 def return_monk2(dataset_shuffle=True, one_hot=False):
@@ -79,11 +80,11 @@ def return_monk2(dataset_shuffle=True, one_hot=False):
 
     idx = len(monk2_train_X)
     split = int(0.5 * idx)
-    train_idx = idx[:split]
-    val_idx = idx[split:]
-    monk2_train = monk2_train_X[:split]
-    monk2_val = monk2_train_X[split:]
-    return monk2_train, monk2_val, monk2_train_y, monk2_test_X, monk2_test_y
+    monk2_val_X = monk2_train_X[split:]
+    monk2_train_X = monk2_train_X[:split]
+    monk2_val_y = monk2_train_y[split:]
+    monk2_train_y = monk2_train_y[:split]
+    return monk2_train_X, monk2_train_y, monk2_val_X, monk2_val_y, monk2_test_X, monk2_test_y
 
 def return_monk3(dataset_shuffle=True, one_hot=False):
     monk3_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.train'
@@ -127,24 +128,28 @@ def return_monk3(dataset_shuffle=True, one_hot=False):
     return monk3_train_X, monk3_train_y, monk3_val_X, monk3_val_y, monk3_test_X, monk3_test_y
 
 
-def return_CUP(dataset_shuffle=True, train_size=250, test_size=250):
+def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_size=125):
     cols = ["id"] + [f"in_{i}" for i in range(1, 13)] + [f"t_{i}" for i in range(1, 5)]
     cup = pd.read_csv("data/ML-CUP25-TR.csv", comment="#", names=cols)
     pd.set_option("display.precision", 3)
 
-    cup_train_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()[0:train_size]
-    cup_train_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()[0:train_size]
-    cup_test_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()[train_size:train_size+test_size]
-    cup_test_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()[train_size:train_size+test_size]
+    cup_train = cup[0:train_size]
+    cup_val = cup[train_size:train_size+validation_size]
+    cup_test = cup[train_size+validation_size:train_size+validation_size+test_size]
 
-    idx = len(cup_train_X)
-    split = int(0.5 * idx)
-    train_idx = idx[:split]
-    val_idx = idx[split:]
-    cup_train = cup_train_X[train_idx]
-    cup_val = cup_train_X[val_idx]
+    if dataset_shuffle:
+        cup_train = cup_train.sample(frac=1).reset_index(drop=True)
+        cup_val = cup_val.sample(frac=1).reset_index(drop=True)
+        cup_test = cup_test.sample(frac=1).reset_index(drop=True)
 
-    return cup_train, cup_val, cup_train_y, cup_test_X, cup_test_y
+    cup_train_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
+    cup_train_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
+    cup_val_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
+    cup_val_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
+    cup_test_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
+    cup_test_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
+    
+    return cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y
     
 # Linear normalization method between a max and min value passed as parameters 
 def normalize(X, min, max, x_min, x_max):

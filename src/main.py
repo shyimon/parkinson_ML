@@ -19,9 +19,9 @@ eta = 0.05        # Learning rate
 
 # Network is created and trained
 print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0005, algorithm="sgd", activation_type="sigmoid", eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.0001, weight_initialzer="def", momentum=0.9)
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0001, algorithm="sgd", activation_type="sigmoid", eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.0001, weight_initialzer="def", momentum=0.9)
 print("Start training with rprop...")
-net.fit(X_train_normalized, y_train, X_val_normalized, y_val, epochs=400, batch_size=20, patience=2000)
+net.fit(X_train_normalized, y_train, X_val_normalized, y_val, epochs=2000, batch_size=4, patience=50)
 
 # Accuracy for the training set
 print("\nCalculating accuracy...")

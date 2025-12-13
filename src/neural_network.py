@@ -138,7 +138,7 @@ class NeuralNetwork:
 
             #early stopping su validation
             if epoch >= patience:
-                if self.loss_history["validation"][epoch] >= self.loss_history["validation"][epoch - 1] * 0.99:
+                if self.loss_history["validation"][epoch] >= self.loss_history["validation"][epoch - 1]:
                     patience_level -= 1
                 else:
                     patience_level = patience
@@ -146,7 +146,7 @@ class NeuralNetwork:
                     if verbose:
                         print(f"Early stopping. Last epoch {epoch}, Train Loss: {avg_loss:.4f}, "
                           f"Val Loss: {avg_val_loss:.4f}, Batch size: {batch_size}")
-                break       
+                    break       
                     
 
             if epoch % 25 == 0 and verbose:

@@ -5,26 +5,40 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-cup_train_X, cup_train_y, cup_test_X, cup_test_y = data.return_CUP()
+cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y = data.return_CUP()
 
-cup_test_X = data.normalize(cup_test_X, -1, 1, cup_train_X.min(axis=0), cup_train_X.max(axis=0))
-cup_test_y = data.normalize(cup_test_y, -1, 1, cup_train_y.min(axis=0), cup_train_y.max(axis=0))
-cup_train_X = data.normalize(cup_train_X, -1, 1, cup_train_X.min(axis=0), cup_train_X.max(axis=0))
-cup_train_y = data.normalize(cup_train_y, -1, 1, cup_train_y.min(axis=0), cup_train_y.max(axis=0))
+train_min = cup_train_X.min(axis=0) 
+train_max = cup_train_X.max(axis=0)
+
+activation_type = "tanh"
+
+if activation_type=="tanh":
+    target_min = -1
+    target_max = 1
+
+cup_test_X = data.normalize(cup_test_X, target_min, target_max, train_min, train_max)
+cup_test_y = data.normalize(cup_test_y, target_min, target_max, cup_train_y.min(axis=0), cup_train_y.max(axis=0))
+cup_val_X = data.normalize(cup_val_X, target_min, target_max, train_min, train_max)
+cup_val_y = data.normalize(cup_val_y, target_min, target_max, cup_train_y.min(axis=0), cup_train_y.max(axis=0))
+cup_train_X = data.normalize(cup_train_X, target_min, target_max, train_min, train_max)
+cup_train_y = data.normalize(cup_train_y, target_min, target_max, cup_train_y.min(axis=0), cup_train_y.max(axis=0))
+
+# np.savetxt("cup.csv", cup_test_X, delimiter=",", fmt='%.4f')
 
 network_structure = [cup_test_X.shape[1]]
-network_structure.append(8)
-network_structure.append(4)
+network_structure.append(6)
+network_structure.append(6)
 network_structure.append(cup_test_y.shape[1])
-eta = 0.05
+eta = 0.2
 
 print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0001, algorithm='sgd', activation_type="tanh", eta_plus=1.2, eta_minus=0.5, weight_initializer="def")
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0000001, algorithm='sgd', activation_type=activation_type, eta_plus=1.2, eta_minus=0.5, weight_initializer="def")
 print("Start training...")
-net.fit(cup_train_X, cup_test_X, cup_train_y, cup_test_y, epochs=400, batch_size=25, patience=20)
+net.fit(cup_train_X, cup_train_y, cup_val_X, cup_val_y, epochs=1000, batch_size=5, patience=20)
 
-y_pred = net.predict(cup_train_X)
-
+y_pred = net.predict(cup_test_X)
+np.savetxt("cuppred.csv", y_pred, delimiter=",", fmt='%.4f')
+np.savetxt("cuptrue.csv", cup_test_y, delimiter=",", fmt='%.4f')
 
 net.save_plots("img/cup_plot.png")
 net.draw_network("img/cup_network")
