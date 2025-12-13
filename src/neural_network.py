@@ -2,6 +2,8 @@ import neuron
 import numpy as np
 import matplotlib.pyplot as plt
 import utils
+import neuron
+from neuron import Neuron
 
 class NeuralNetwork:
     # Constructor
@@ -34,13 +36,16 @@ class NeuralNetwork:
 
         for l in range(len(self.layers) - 1):
             for n in self.layers[l]:
+                n : Neuron
                 n.attach_to_output(self.layers[l + 1])
 
     # a single example is propagated through the network, calling
     # the feed_neuron method for each neuron
     def forward(self, x):
         for l in range(len(self.layers) - 1):
-            x = [n.feed_neuron(x) for n in self.layers[l + 1]]
+            for n in self.layers[l+1]:
+                n : Neuron
+                x = n.feed_neuron(x)
         return np.array(x, dtype="float")
 
     # streamlines and encapsulates the forwarding of multiple examples
@@ -52,12 +57,14 @@ class NeuralNetwork:
         """Resetta tutti gli accumulatori di gradienti"""
         for l in range(1, len(self.layers)):
             for neuron in self.layers[l]:
+                neuron : Neuron
                 neuron.reset_grad_accum()
 
     def _apply_accumulated_gradients(self, batch_size):
         """Applica gradienti accumulati a tutti i neuroni"""
         for l in range(1, len(self.layers)):
             for neuron in self.layers[l]:
+                neuron : Neuron
                 neuron.apply_accumulated_gradients(eta=self.eta, 
                                                    batch_size=batch_size, 
                                                    l2_lambda=self.l2_lambda, 
@@ -73,6 +80,7 @@ class NeuralNetwork:
             error_signals = [error_signals]
         
         for i, neuron in enumerate(self.layers[-1]):
+            neuron : Neuron
             neuron.compute_delta(error_signals[i])
         
         for l in range(len(self.layers) - 2, 0, -1):
@@ -82,6 +90,7 @@ class NeuralNetwork:
         for l in range(len(self.layers) - 1, 0, -1):
             for n in self.layers[l]:
                 if accumulate:
+                    n: Neuron
                     n.accumulate_gradients()
                 else:
                     n.update_weights(self.eta, l2_lambda=self.l2_lambda)
