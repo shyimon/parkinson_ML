@@ -12,6 +12,8 @@ class Neuron:
         self.delta = 0.0
         self.inputs = []
         self.attached_neurons = []
+        self.vel_w = np.zeros(num_inputs)
+        self.vel_b = 0.0
 
         limit = 1 / math.sqrt(num_inputs) if num_inputs > 0 else 0.2
 
@@ -102,13 +104,21 @@ class Neuron:
         if algorithm == 'sgd':
             l2_lambda = kwargs.get('l2_lambda', 0.0)
             momentum = kwargs.get('momentum', 0.0)
+            # media del gradiente sul batch
             grad_w = self.weight_grad_accum / batch_size
-            grad_b = self.bias_grad_accum / batch_size         
-            self.weights -= eta * (grad_w - l2_lambda * self.weights)
-            self.bias -= eta * grad_b
-            # Reset per SGD
+            grad_b = self.bias_grad_accum / batch_size  
+
+            if momentum >= 0.0:
+                self.vel_w = momentum * self.vel_w + grad_w
+                self.vel_b = momentum * self.vel_b + grad_b
+                self.weights -= eta * self.vel_w
+                self.bias -= eta * self.vel_b  
+            else:
+             self.weights -= eta * grad_w
+            self.bias -= eta * grad_b  
+            # Reset accumulatori batch
             self.weight_grad_accum.fill(0.0)
-            self.bias_grad_accum = 0.0
+            self.bias_grad_accum = 0.0 
         
         elif algorithm == 'rprop':
             eta_plus = kwargs.get('eta_plus', 1.2)
