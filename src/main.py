@@ -3,7 +3,7 @@ import data_manipulation as data
 import neural_network as nn
 
 
-X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
+X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=False)
 
 # Normalization
 # X_train_normalized = data.normalize(X_train, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
