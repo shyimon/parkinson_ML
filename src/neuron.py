@@ -104,7 +104,15 @@ class Neuron:
         if algorithm == 'sgd':
             l2_lambda = kwargs.get('l2_lambda', 0.0)
             momentum = kwargs.get('momentum', 0.0)
+            grad_w = self.weight_grad_accum / batch_size
+            grad_b = self.bias_grad_accum / batch_size         
+            self.weights -= eta * (grad_w - l2_lambda * self.weights)
+            self.bias -= eta * grad_b
+            # Reset per SGD
+            self.weight_grad_accum.fill(0.0)
+            self.bias_grad_accum = 0.0
             # media del gradiente sul batch
+            '''
             grad_w = self.weight_grad_accum / batch_size
             grad_b = self.bias_grad_accum / batch_size  
 
@@ -119,7 +127,7 @@ class Neuron:
             # Reset accumulatori batch
             self.weight_grad_accum.fill(0.0)
             self.bias_grad_accum = 0.0 
-        
+            '''
         elif algorithm == 'rprop':
             eta_plus = kwargs.get('eta_plus', 1.2)
             eta_minus = kwargs.get('eta_minus', 0.5)

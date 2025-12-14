@@ -41,8 +41,7 @@ class NeuralNetwork:
     # the feed_neuron method for each neuron
     def forward(self, x):
         for l in range(len(self.layers) - 1):
-            for n in self.layers[l+1]:
-                x = [n.feed_neuron(x) for n in self.layers[l+1]]
+            x = [n.feed_neuron(x) for n in self.layers[l + 1]]
         return np.array(x, dtype="float")
 
     # streamlines and encapsulates the forwarding of multiple examples
