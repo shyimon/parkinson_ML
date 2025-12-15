@@ -130,7 +130,7 @@ def return_monk3(dataset_shuffle=True, one_hot=False):
 
 def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_size=125):
     cols = ["id"] + [f"in_{i}" for i in range(1, 13)] + [f"t_{i}" for i in range(1, 5)]
-    cup = pd.read_csv("data/ML-CUP25-TR.csv", comment="#", names=cols)
+    cup = pd.read_csv("../data/ML-CUP25-TR.csv", comment="#", names=cols) # Quando runnavo da main_CUP_cascade.py non trovava il file 
     pd.set_option("display.precision", 3)
 
     cup_train = cup[0:train_size]
