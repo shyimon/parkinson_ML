@@ -66,7 +66,15 @@ class Neuron:
 
     # a single example is fed to the neuron. The sum and then whatever activation function was selected are called
     def feed_neuron(self, inputs):
-        self.inputs = np.array(inputs, dtype=float)
+        # Converti inputs in array numpy e assicurati che sia 1-D
+        inputs = np.array(inputs, dtype=float).flatten()
+    
+        # Debug: verifica la dimensione
+        if inputs.shape[0] != self.weights.shape[0]:
+            print(f"DEBUG feed_neuron: inputs shape {inputs.shape}, weights shape {self.weights.shape}")
+            print(f"  Neuron: layer index {self.index_in_layer}, is_output: {self.is_output_neuron}")
+    
+        self.inputs = inputs
         self.net = float(np.dot(self.weights, inputs)) + self.bias
         self.output = self.activation_funct(self.net)
         return self.output

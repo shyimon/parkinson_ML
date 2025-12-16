@@ -1,45 +1,67 @@
 import numpy as np
 import data_manipulation as data
-import neural_network as nn
+import grid_search
 
+def main():
+    X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, 
+                            dataset_shuffle=True)
+    
+    print(f"Shape dei dati:")
+    print(f"  X_train: {X_train.shape}")
+    print(f"  y_train: {y_train.shape}")
+    print(f"  X_val: {X_val.shape}")
+    print(f"  X_test: {X_test.shape}")
+    
+    # Stampa il primo esempio per verifica
+    print(f"\nPrimo esempio X_train[0]:")
+    print(f"  Valori: {X_train[0]}")
+    print(f"  Tipo: {type(X_train[0])}")
+    print(f"  Dtype: {X_train[0].dtype}")
+    
+    # Verifica se ci sono NaN
+    print(f"\nControllo NaN:")
+    print(f"  NaN in X_train: {np.isnan(X_train).any()}")
+    print(f"  NaN in y_train: {np.isnan(y_train).any()}")
 
-X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
+    # Normalizzo
+    X_train_norm, X_val_norm, X_test_norm = data.normalize_dataset(
+            X_train, X_val, X_test, 0, 1
+    )
+   
+     # Esegui ricerca dicotomica
+    results = grid_search.run_advanced_monk_search(3)
+    
+    # uso i parametri migliori per un training finale
+    best_params = results['best_params']
+    
+    print("\n" + "="*60)
+    print("CONFIGURAZIONE CONSIGLIATA:")
+    print("="*60)
+    
+    # Costruisco la struttura della rete
+    input_size = X_train.shape[1]
+    output_size = 1
+    
+    network_structure = [input_size]
+    if 'hidden_structure' in best_params:
+        network_structure.extend(best_params['hidden_structure'])
+    network_structure.append(output_size)
+    
+    print(f"\nStruttura rete: {network_structure}")
+    print(f"\nParametri di training:")
+    print(f"  eta (learning rate): {best_params.get('eta', 0.1)}")
+    print(f"  batch_size: {best_params.get('batch_size', 8)}")
+    print(f"  algorithm: {best_params.get('algorithm', 'sgd')}")
+    print(f"  activation_type: {best_params.get('activation_type', 'sigmoid')}")
+    print(f"  loss_type: {best_params.get('loss_type', 'half_mse')}")
+    print(f"  epochs: {best_params.get('epochs', 2000)}")
+    print(f"  patience: {best_params.get('patience', 100)}")
+    
+    if 'l2_lambda' in best_params and best_params['l2_lambda'] > 0:
+        print(f"  l2_lambda (regolarizzazione): {best_params['l2_lambda']}")
+    
+    if 'momentum' in best_params and best_params['momentum'] > 0:
+        print(f"  momentum: {best_params['momentum']}")
 
-# Normalization
-# X_train_normalized = data.normalize(X_train, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
-# X_test_normalized = data.normalize(X_test, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
-X_train_normalized = X_train
-X_val_normalized = X_val
-X_test_normalized = X_test
-
-network_structure = [X_train_normalized.shape[1]]
-network_structure.append(4)  # Hidden layer with 4 neurons
-network_structure.append(1)  # Output layer with 1 neuron
-eta = 0.05        # Learning rate
-
-# Network is created and trained
-# DA AGGIUNGERE: COERENZA TRA PRINT E PARAMETRI
-print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0001, algorithm="sgd", activation_type="sigmoid", eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.0001, weight_initializer="def", momentum=0.9)
-print("Start training with rprop...")
-net.fit(X_train_normalized, y_train, X_val_normalized, y_val, epochs=2000, batch_size=4, patience=50)
-
-# Accuracy for the training set
-print("\nCalculating accuracy...")
-y_pred = net.predict(X_train_normalized)
-y_pred_class = np.where(y_pred >= 0.5, 1, 0)
-
-accuracy = np.mean(y_pred_class == y_train) * 100
-print(f"\nFinal Training Accuracy: {accuracy:.2f}%")
-
-# Accuracy for the test set
-y_pred_test = net.predict(X_test_normalized)
-y_pred_test_class = np.where(y_pred_test >= 0.5, 1, 0)
-test_accuracy = np.mean(y_pred_test_class == y_test) * 100
-print(f"Test Accuracy: {test_accuracy:.2f}%")
-
-print(f"Details:")
-print(f"Correctly predicted training patterns: {np.sum(y_pred_class == y_train)}/{len(y_train)}")
-print(f"Correctly predicted test patterns: {np.sum(y_pred_test_class == y_test)}/{len(y_test)}")
-net.save_plots("img/plot.png")
-net.draw_network("img/network")
+if __name__ == "__main__":
+    main()

@@ -150,9 +150,24 @@ def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_s
     cup_test_y = cup_test[['t_1', 't_2', 't_3', 't_4']].to_numpy()
     
     return cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y
+
+def normalize_dataset(X_train, X_val, X_test, min_val=0, max_val=1):
+    """Normalizza tutti i dataset usando min/max del training set"""
+    # Converte in float se necessario (per one-hot encoding booleano)
+    if X_train.dtype == bool or np.issubdtype(X_train.dtype, np.bool_):
+        X_train = X_train.astype(float)
+        X_val = X_val.astype(float)
+        X_test = X_test.astype(float)
     
-# Linear normalization method between a max and min value passed as parameters 
-def normalize(X, min, max, x_min, x_max):
+    x_min = X_train.min(axis=0)
+    x_max = X_train.max(axis=0)
+    
+    # Evita divisione per zero
     diff = x_max - x_min
-    diff[diff == 0] = 1e-9
-    return (X - x_min) / diff * (max - min) + min
+    diff[diff == 0] = 1
+    
+    X_train_norm = (X_train - x_min) / diff * (max_val - min_val) + min_val
+    X_val_norm = (X_val - x_min) / diff * (max_val - min_val) + min_val
+    X_test_norm = (X_test - x_min) / diff * (max_val - min_val) + min_val
+    
+    return X_train_norm, X_val_norm, X_test_norm

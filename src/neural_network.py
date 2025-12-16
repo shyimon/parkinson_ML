@@ -23,28 +23,80 @@ class NeuralNetwork:
         self.layers = []
         self.momentum = kwargs.get("momentum", 0.0) # Implementazione momentum
 
+        self.debug = kwargs.get("debug", False)
+
+        # CONVERTO TUTTI GLI ELEMENTI A INTERI
+        self.network_structure = [int(n) for n in network_structure]
+
+        # Layer di input 
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
-                activation_function_type=self.activation_type, is_output_neuron=False, weight_initializer=self.weight_initializer) 
-                for j in range(network_structure[0])])
+            activation_function_type=self.activation_type, is_output_neuron=False, 
+            weight_initializer=self.weight_initializer) 
+            for j in range(self.network_structure[0])])
         
-        for i in range(len(network_structure) - 1):
-            self.layers.append([neuron.Neuron(num_inputs=network_structure[i], 
-                        index_in_layer=j, activation_function_type=self.activation_type, 
-                        is_output_neuron=(i==len(network_structure)-2), weight_initializer=self.weight_initializer) 
-                        for j in range(network_structure[i + 1])])
+        for i in range(len(self.network_structure) - 1):
+            self.layers.append([neuron.Neuron(num_inputs=self.network_structure[i], 
+                    index_in_layer=j, activation_function_type=self.activation_type, 
+                    is_output_neuron=(i==len(self.network_structure)-2), 
+                    weight_initializer=self.weight_initializer) 
+                    for j in range(self.network_structure[i + 1])])
 
         for l in range(len(self.layers) - 1):
             for n in self.layers[l]:
                 n.attach_to_output(self.layers[l + 1])
 
-    # a single example is propagated through the network, calling
-    # the feed_neuron method for each neuron
+   
     def forward(self, x):
-        for l in range(len(self.layers) - 1):
-            for n in self.layers[l+1]:
-                x = [n.feed_neuron(x) for n in self.layers[l+1]]
-        return np.array(x, dtype="float")
-
+        """Propagazione in avanti. x: singolo esempio (1D) o batch (2D)"""
+        # Converti in array numpy
+        x = np.array(x, dtype=float)
+    
+        # Se x è un singolo esempio (1D), convertilo in 2D (1, n_features)
+        if len(x.shape) == 1:
+            x = x.reshape(1, -1)
+            single_example = True
+        else:
+            single_example = False
+    
+        batch_size = x.shape[0]
+        n_features = x.shape[1]
+    
+        # Verifica che il numero di feature corrisponda al numero di neuroni di input
+        expected_input_size = len(self.layers[0])  # Numero di neuroni nel layer di input
+        if n_features != expected_input_size:
+            raise ValueError(
+                f"Input shape mismatch! Atteso {expected_input_size} feature, "
+                f"ricevuto {n_features}. Shape input: {x.shape}"
+            )
+    
+        outputs = []
+        for i in range(batch_size):
+            current_input = x[i].flatten()  # Assicura che sia 1-D
+        
+            # Propaga attraverso i layer, partendo dal primo hidden layer (indice 1)
+            for layer_idx in range(1, len(self.layers)):
+                layer_output = []
+                for neuron in self.layers[layer_idx]:
+                    # Verifica la dimensione
+                    if current_input.shape[0] != neuron.weights.shape[0]:
+                        print(f"DEBUG: Layer {layer_idx}, neurone {neuron.index_in_layer}")
+                        print(f"  Input shape: {current_input.shape}")
+                        print(f"  Weights shape: {neuron.weights.shape}")
+                        print(f"  Layer precedente ha {len(self.layers[layer_idx-1])} neuroni")
+                        raise ValueError("Dimension mismatch")
+                
+                    output = neuron.feed_neuron(current_input)
+                    layer_output.append(output)
+            
+                current_input = np.array(layer_output, dtype=float).flatten()
+        
+            outputs.append(current_input)
+    
+        if single_example:
+            return outputs[0]
+        else:
+            return np.vstack(outputs)
+        
     # streamlines and encapsulates the forwarding of multiple examples
     def predict(self, X):
         preds = [self.forward(xi) for xi in X]
@@ -153,7 +205,34 @@ class NeuralNetwork:
 
             if epoch % 25 == 0 and verbose:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nValidation Loss: {avg_val_loss:.4f}\n")
+            return self.loss_history
+
+    def validate_structure(self):
+        """Valida che la struttura della rete sia coerente"""
+        print("\n=== VALIDAZIONE STRUTTURA RETE ===")
         
+        # Stampa informazioni sui layer
+        for i, layer in enumerate(self.layers):
+            print(f"Layer {i}: {len(layer)} neuroni")
+            
+            if i > 0:  # Non il layer di input
+                # Verifica un neurone campione
+                if len(layer) > 0:
+                    sample_neuron = layer[0]
+                    expected_input_size = len(self.layers[i-1])
+                    actual_input_size = sample_neuron.weights.shape[0]
+                    
+                    print(f"  Primo neurone: pesi shape = {sample_neuron.weights.shape}")
+                    print(f"  Input atteso dal layer precedente: {expected_input_size}")
+                    print(f"  Input effettivo del neurone: {actual_input_size}")
+                    
+                    if actual_input_size != expected_input_size:
+                        print(f"  ⚠️ ERRORE: Mismatch!")
+                        return False
+        
+        print("✓ Struttura valida")
+        return True
+       
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
         """
         Calcola la loss in base al tipo specificato.
