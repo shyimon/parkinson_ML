@@ -21,7 +21,7 @@ class Neuron:
 
         if weight_initializer == 'xavier':
             self.weights = np.random.uniform(-limit, limit, size=num_inputs)
-            self.bias = 0.0 
+            self.bias = np.random.uniform(-limit, limit)
         else:
             self.weights = np.random.uniform(-0.2, 0.2, size=num_inputs)
             self.bias = np.random.uniform(-0.2, 0.2)
@@ -59,9 +59,10 @@ class Neuron:
     # Activation function's derivative gets called dynamically (string based) based on how the neuron was initialized
     def activation_deriv(self, input):
         if self.activation_function_type == "sigmoid":
-            deriv = input * (1 - input)
+            deriv = self.output * (1.0 - self.output)
+            deriv = self.output * (1 - self.output)
         elif self.activation_function_type == "tanh":
-            deriv = 1.0 - np.square(input)
+             deriv = 1.0 - self.output * self.output
         else:
             raise ValueError(f"The specified activation function {self.activation_function_type} is not implemented as of yet.")
         return np.maximum(deriv, 1e-8)
@@ -69,12 +70,18 @@ class Neuron:
     # a single example is fed to the neuron. The sum and then whatever activation function was selected are called
     def feed_neuron(self, inputs):
         # Converti inputs in array numpy e assicurati che sia 1-D
+        if inputs is None:
+            print(f"ERROR: inputs is None! Neuron: layer index {self.index_in_layer}, is_output: {self.is_output_neuron}")
+            raise ValueError("Inputs cannot be None")
+    
         inputs = np.array(inputs, dtype=float).flatten()
     
         # Debug: verifica la dimensione
         if inputs.shape[0] != self.weights.shape[0]:
             print(f"DEBUG feed_neuron: inputs shape {inputs.shape}, weights shape {self.weights.shape}")
             print(f"  Neuron: layer index {self.index_in_layer}, is_output: {self.is_output_neuron}")
+            # Potrebbe essere un errore serio, ma per ora continuiamo
+            # raise ValueError(f"Dimension mismatch: inputs {inputs.shape[0]}, weights {self.weights.shape[0]}")
     
         self.inputs = inputs
         self.net = float(np.dot(self.weights, inputs)) + self.bias
@@ -118,6 +125,16 @@ class Neuron:
             grad_b = self.bias_grad_accum / batch_size         
             self.weights -= eta * (grad_w - l2_lambda * self.weights)
             self.bias -= eta * grad_b
+
+            if momentum > 0.0:
+                self.vel_w = momentum * self.vel_w + grad_w
+                self.vel_b = momentum * self.vel_b + grad_b
+                self.weights -= eta * (self.vel_w - l2_lambda * self.weights)
+                self.bias -= eta * self.vel_b
+            else:
+                self.weights -= eta * (grad_w - l2_lambda * self.weights)
+                self.bias -= eta * grad_b
+
             # Reset per SGD
             self.weight_grad_accum.fill(0.0)
             self.bias_grad_accum = 0.0

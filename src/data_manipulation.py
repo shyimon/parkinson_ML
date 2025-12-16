@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 # Monk datasets are returned separately and splitted into training, test, parameters and targets
 # ho messo dataset_shuffle=false

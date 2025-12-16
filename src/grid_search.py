@@ -32,7 +32,7 @@ class GridSearch:
         # self.batch_size_range = [1 << i for i in range(X_train_size.bit_length())]
         # self.batch_size_range.append(X_train_size)
     
-    def _create_folds(self, X, seed=42):
+    def _create_folds(self, X, y=None, seed=42):
         n_samples = len(X)
         indices = np.arange(n_samples)
         
@@ -81,7 +81,7 @@ class GridSearch:
         return train_acc, val_acc
     
     def _evaluate_params(self, params, X, y):
-        folds = self._create_folds(X, y, seed=params.get('cv_seed', 42))
+        folds = self._create_folds(X, seed=params.get('cv_seed', 42))
         train_accuracies = []
         val_accuracies = []
         

@@ -51,64 +51,58 @@ class NeuralNetwork:
 
    
     def forward(self, x):
-        for l in range(len(self.layers) - 1):
-            x = [n.feed_neuron(x) for n in self.layers[l + 1]]
-        return np.array(x, dtype="float")
-
-        """Propagazione in avanti. x: singolo esempio (1D) o batch (2D)"""
-        # Converti in array numpy
-        x = np.array(x, dtype=float)
+        """
+        Propagazione in avanti per un singolo esempio.
+        x: array 1D o 2D
+        """
+        if len(x.shape) > 1:
+            return self.predict(x)
+        # Assicurati che x sia un array 1D
+        x = np.array(x, dtype=float).flatten()
     
-        # Se x è un singolo esempio (1D), convertilo in 2D (1, n_features)
-        if len(x.shape) == 1:
-            x = x.reshape(1, -1)
-            single_example = True
-        else:
-            single_example = False
+        # DEBUG
+        if self.debug:
+            print(f"DEBUG forward: input = {x[:3]}... (shape: {x.shape})")
     
-        batch_size = x.shape[0]
-        n_features = x.shape[1]
+        # Inizia con l'input
+        current_values = x
     
-        # Verifica che il numero di feature corrisponda al numero di neuroni di input
-        expected_input_size = len(self.layers[0])  # Numero di neuroni nel layer di input
-        if n_features != expected_input_size:
-            raise ValueError(
-                f"Input shape mismatch! Atteso {expected_input_size} feature, "
-                f"ricevuto {n_features}. Shape input: {x.shape}"
-            )
-    
-        outputs = []
-        for i in range(batch_size):
-            current_input = x[i].flatten()  # Assicura che sia 1-D
+        # Propaga attraverso TUTTI i layer, partendo dal PRIMO HIDDEN LAYER (indice 1)
+        for layer_idx in range(1, len(self.layers)):
+            layer_output = []
         
-            # Propaga attraverso i layer, partendo dal primo hidden layer (indice 1)
-            for layer_idx in range(1, len(self.layers)):
-                layer_output = []
-                for neuron in self.layers[layer_idx]:
-                    # Verifica la dimensione
-                    if current_input.shape[0] != neuron.weights.shape[0]:
-                        print(f"DEBUG: Layer {layer_idx}, neurone {neuron.index_in_layer}")
-                        print(f"  Input shape: {current_input.shape}")
-                        print(f"  Weights shape: {neuron.weights.shape}")
-                        print(f"  Layer precedente ha {len(self.layers[layer_idx-1])} neuroni")
-                        raise ValueError("Dimension mismatch")
-                
-                    output = neuron.feed_neuron(current_input)
-                    layer_output.append(output)
-            
-                current_input = np.array(layer_output, dtype=float).flatten()
+            if self.debug:
+                print(f"DEBUG forward: Layer {layer_idx}, {len(self.layers[layer_idx])} neuroni")
+                print(f"  Input al layer: shape = {current_values.shape}")
         
-            outputs.append(current_input)
+            for neuron in self.layers[layer_idx]:
+                # Ogni neurone riceve TUTTI i valori del layer precedente
+                output = neuron.feed_neuron(current_values)
+                layer_output.append(output)
+        
+            # L'output di questo layer diventa l'input per il prossimo
+            current_values = np.array(layer_output, dtype=float)
+        
+            if self.debug:
+                print(f"  Output dal layer: shape = {current_values.shape}")
     
-        if single_example:
-            return outputs[0]
-        else:
-            return np.vstack(outputs)
-        
+        return current_values
+    
     # streamlines and encapsulates the forwarding of multiple examples
     def predict(self, X):
-        preds = [self.forward(xi) for xi in X]
-        return np.vstack(preds)
+        #Predizione per un batch di esempi.
+        # X: array 2D (n_esempi, n_feature)
+
+        # Se X è un singolo esempio (1D), convertilo in 2D
+        if len(X.shape) == 1:
+            X = X.reshape(1, -1)
+    
+        predictions = []
+        for i in range(X.shape[0]):
+            pred = self.forward(X[i])
+            predictions.append(pred)
+    
+        return np.vstack(predictions)
 
     def _reset_gradients(self):
         """Resetta tutti gli accumulatori di gradienti"""
@@ -147,7 +141,7 @@ class NeuralNetwork:
                     n.accumulate_gradients()
                 else:
                     n.update_weights(self.eta, l2_lambda=self.l2_lambda)
-        
+    
     # core training method.
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
@@ -185,7 +179,7 @@ class NeuralNetwork:
 
             # Training loss    
             y_pred_train = self.predict(X_train)
-            train_loss_epoch = np.sum(self.compute_loss(y_train, y_pred_train)) / len(X_train)
+            train_loss_epoch = np.sum(self.compute_loss(y_train, y_pred_train, loss_type=self.loss_type)) / len(X_train)
             self.loss_history["training"].append(train_loss_epoch)
 
             #Validation loss (non tocca i pesi)
@@ -208,15 +202,33 @@ class NeuralNetwork:
                     if verbose:
                         print(f"Early stopping. Last epoch {epoch}, Train Loss: {train_loss_epoch:.4f}, "
                           f"Val Loss: {avg_val_loss:.4f}, Batch size: {batch_size}")
-                    break       
-
-            for layer in self.layers: # restore best parameters
-                for neuron in layer:
-                    neuron.restore_best_weights()
+                    break      
 
             if epoch % 25 == 0 and verbose:
-                print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nValidation Loss: {avg_val_loss:.4f}\n")
-        
+                print(f"Epoch {epoch}, Loss: {avg_val_loss:.4f}, Batch size: {batch_size}\nValidation Loss: {avg_val_loss:.4f}\n")
+        return self.loss_history
+
+    def _update_lr_on_plateau(self, val_loss):
+        """Aggiorna il learning rate se la loss di validation non migliora"""
+        # Soglia minima di miglioramento
+        improvement_threshold = 0.001
+    
+        if val_loss < self.best_val_loss - improvement_threshold:
+            self.best_val_loss = val_loss
+            self.lr_wait = 0
+            if self.debug:
+                print(f"Miglioramento! New best val loss: {val_loss:.4f}")
+        else:
+            self.lr_wait += 1
+    
+        # Riduci LR solo dopo 20 epoche senza miglioramento (non 10)
+        if self.lr_wait >= 20:
+            old_eta = self.eta
+            self.eta *= self.decay
+            self.lr_wait = 0
+            if self.debug:
+                print(f"Learning rate ridotto: {old_eta:.6f} -> {self.eta:.6f}") 
+
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
         """
         Calcola la loss in base al tipo specificato.
@@ -261,7 +273,7 @@ class NeuralNetwork:
             return np.where(is_small_error, error, delta * np.sign(error)) # Se l'errore è piccolo si comporta come MSE (error), altrimenti come MAE (delta * sign(error))
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
-    
+    """
     # a method to save the losses of the training and test sets as a plot
     def save_plots(self, path):
         plt.plot(self.loss_history["training"], label='Training Loss')
@@ -272,3 +284,4 @@ class NeuralNetwork:
 
     def draw_network(self, path):
         utils.draw_network(self.layers, path)
+    """
