@@ -1,669 +1,575 @@
 import numpy as np
-import itertools
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-import neural_network as nn
-import data_manipulation as data
-from collections import defaultdict
-import warnings
 import time
-warnings.filterwarnings('ignore')
+import os
+import json
+import itertools
 
 class GridSearch:
-    def __init__(self, X_train, y_train, X_val, y_val, X_test, y_test):
-        self.X_train = X_train
-        self.y_train = y_train
-        self.X_val = X_val
-        self.y_val = y_val
-        self.X_test = y_test
+    def __init__(self, cv_folds=5, verbose=True, results_dir='grid_search_results'):
+        self.cv_folds = cv_folds
+        self.verbose = verbose
+        self.results_dir = results_dir
+        os.makedirs(results_dir, exist_ok=True)
+        
+        self.results = []
         self.best_params = None
-        self.best_score = -np.inf
-        self.search_history = []
+        self.best_mean = -np.inf
+        self.best_std = 0
         
-    def _evaluate_params(self, params, trials=1):
-        """Valuta un set di parametri su trials ripetuti"""
-        accuracies = []
+        # range iniziali per ciascun parametro
+        self.lr_range = [0.001, 0.6]
+        self.hidden_range = [2, 6]
+        self.epochs_range = [1000, 2000]
+        '''self.hidden_layers_range = [[2], [3], [4], [6], [8],
+                              [2, 2], [4, 2], [6, 4], [6, 2], [8, 4], [8, 6],
+                              [6, 4, 2], [8, 6, 4], [8, 6, 2],
+                              [8, 6, 4, 2]]'''
+        # self.l2_reg_range = [0.0, 0.000001, 0.00001, 0.0001, 0.001, 0.01]
+        # da aggiungere weight initializer
+        # da aggiungere activation type
+        # da aggiungere loss type
+        # da aggiungere algorithm
+        # self.batch_size_range = [1 << i for i in range(X_train_size.bit_length())]
+        # self.batch_size_range.append(X_train_size)
     
-        for trial in range(trials):
+    def _create_folds(self, X, seed=42):
+        n_samples = len(X)
+        indices = np.arange(n_samples)
+        
+        # shuffle con seed fisso per riproducibilità
+        rng = np.random.RandomState(seed)
+        rng.shuffle(indices)
+        
+        # calcola dimensione di ogni fold
+        fold_size = n_samples // self.cv_folds
+        extra_samples = n_samples % self.cv_folds
+
+        folds = []
+        current_start = 0
+        
+        for i in range(self.cv_folds):
+            current_fold_size = fold_size + (1 if i < extra_samples else 0)
+            start = current_start
+            end = current_start + current_fold_size
+
+            val_indices = indices[start:end]
+            train_indices = np.concatenate([indices[:start], indices[end:]])
+            folds.append((train_indices, val_indices))
+                
+            # aggiorna il prossimo fold
+            current_start = end
+
+        return folds
+    
+    def _train_single_model(self, X_train, y_train, X_val, y_val, params):
+        import neural_network as nn
+
+        structure = [X_train.shape[1], params['hidden_neurons'], y_train.shape[1]]
+        net = nn.NeuralNetwork(structure, eta=params['learning_rate'])
+
+        net.fit(X_train, y_train, X_val, y_val, epochs=params['epochs'])
+        
+        # Calcola accuracy sia su training che validation
+        train_predictions = net.predict(X_train)
+        train_pred_classes = (train_predictions >= 0.5).astype(int)
+        train_acc = np.mean(train_pred_classes == y_train) * 100
+        
+        val_predictions = net.predict(X_val)
+        val_pred_classes = (val_predictions >= 0.5).astype(int)
+        val_acc = np.mean(val_pred_classes == y_val) * 100
+        
+        return train_acc, val_acc
+    
+    def _evaluate_params(self, params, X, y):
+        folds = self._create_folds(X, y, seed=params.get('cv_seed', 42))
+        train_accuracies = []
+        val_accuracies = []
+        
+        for fold, (train_idx, val_idx) in enumerate(folds):
+            X_train_fold = X[train_idx]
+            y_train_fold = y[train_idx]
+            X_val_fold = X[val_idx]
+            y_val_fold = y[val_idx]
+            
             try:
-                # Costruisce la struttura della rete
-                input_size = self.X_train.shape[1]
-                output_size = self.y_train.shape[1] if len(self.y_train.shape) > 1 else 1
-        
-                network_structure = [int(input_size)]  # Converti a int
-        
-                # Gestione flessibile della struttura
-                if 'hidden_structure' in params and params['hidden_structure']:
-                    # Usa struttura specificata, convertendo a int
-                    network_structure.extend([int(n) for n in params['hidden_structure']])
-                else:
-                    # Usa numero di layer e neuroni per layer
-                    hidden_layers = int(params.get('hidden_layers', 1))
-                    hidden_neurons = int(params.get('hidden_neurons', 4))
-                    for _ in range(hidden_layers):
-                        network_structure.append(int(hidden_neurons))
-        
-                network_structure.append(int(output_size))  # Converti a int
-        
-                print(f"  Trial {trial+1}: Struttura rete: {network_structure}")
-                print(f"  Input size atteso: {input_size}")
-
-                 #  debug per il primo trial
-                debug_mode = (trial == 0)
-            
-                # Parametri per NeuralNetwork
-                nn_params = {'eta': params.get('eta', 0.1),'loss_type': params.get('loss_type', 'half_mse'),
-                    'algorithm': params.get('algorithm', 'sgd'),
-                    'activation_type': params.get('activation_type', 'sigmoid'),
-                    'l2_lambda': params.get('l2_lambda', 0.0),
-                    'momentum': params.get('momentum', 0.0),
-                    'weight_initializer': params.get('weight_initializer', 'def'),
-                    'eta_plus': params.get('eta_plus', 1.2),
-                    'eta_minus': params.get('eta_minus', 0.5),
-                    'mu': params.get('mu', 1.75),
-                    'decay': params.get('decay', 0.0001)
-                }
-            
-                # Crea e allena la rete
-                net = nn.NeuralNetwork(network_structure, **nn_params)
-
-                # Test forward con un esempio
-                if debug_mode:
-                    print("  Test forward con un esempio...")
-                    test_input = self.X_train[0]
-                    print(f"    Test input shape: {test_input.shape}")
-                    output = net.forward(test_input)
-                    print(f"    Output shape: {output.shape}")
-
-                # Parametri per fit
-                fit_params = {'epochs': params.get('epochs', 1000),
-                'batch_size': params.get('batch_size', 4),
-                'patience': params.get('patience', 50),
-                'verbose': False
-                }
-            
-                net.fit(self.X_train, self.y_train, self.X_val, self.y_val, **fit_params)
-            
-                # Calcola accuratezza su validation set
-                y_pred = net.predict(self.X_val)
-            
-                if output_size == 1:  # Classificazione binaria
-                    y_pred_class = np.where(y_pred >= 0.5, 1, 0)
-                    accuracy = np.mean(y_pred_class == self.y_val) * 100
-                else:  # Regressione
-                    # Per regressione usiamo negative MEE (più alto è meglio)
-                    accuracy = -np.sqrt(np.mean((y_pred - self.y_val) ** 2))
-            
-                    accuracies.append(accuracy)
-            
-                # Aggiorna i migliori parametri
-                    current_acc = np.mean(accuracies)
-                    if current_acc > self.best_score:
-                        self.best_score = current_acc
-                        self.best_params = params.copy()
-                        self.best_params['network_structure'] = network_structure
-                        self.best_params['hidden_structure'] = network_structure[1:-1]  # Solo hidden layers
+                train_acc, val_acc = self._train_single_model(
+                    X_train_fold, y_train_fold, X_val_fold, y_val_fold, params)
+                train_accuracies.append(train_acc)
+                val_accuracies.append(val_acc)
+                
+                if self.verbose:
+                    print(f"    Fold {fold+1}: Train={train_acc:.1f}%, Val={val_acc:.1f}%", end='  ')
             except Exception as e:
-                print(f"    Errore durante il trial {trial+1}: {e}")
-                # In caso di errore, assegna una accuracy molto bassa
-                accuracies.append(-999)
+                train_accuracies.append(0.0)
+                val_accuracies.append(0.0)
+                if self.verbose:
+                    print(f"    Fold {fold+1}: errore", end='  ')
+        
+        if train_accuracies and val_accuracies:
+            mean_train_acc = np.mean(train_accuracies)
+            std_train_acc = np.std(train_accuracies)
+            mean_val_acc = np.mean(val_accuracies)
+            std_val_acc = np.std(val_accuracies)
+            
+            if self.verbose:
+                print(f"\n    Training: {mean_train_acc:.1f}% ± {std_train_acc:.1f}%")
+                print(f"    Validation: {mean_val_acc:.1f}% ± {std_val_acc:.1f}%")
+            
+            return mean_val_acc, std_val_acc, mean_train_acc, std_train_acc
+        
+        return 0.0, 0.0, 0.0, 0.0
+    
+    def _grid_points(self, ranges_dict, n_points=3):
+        # genero punti della griglia uniformemente distribuiti nei range
+        grid_points = []
+
+        # per ogni parametro genero n_points valori uniformemente distribuiti
+        param_values = {}
+        for param_name, (min_val, max_val) in ranges_dict.items():
+            if param_name in ['hidden_neurons', 'epochs']:  # Parametri discreti
+                values = np.linspace(min_val, max_val, n_points).astype(int)
+                values = np.unique(values)  # Rimuove i duplicati
+            else:  # Parametri continui
+                values = np.linspace(min_val, max_val, n_points)
+            param_values[param_name] = values.tolist()
+    
+         # Prodotto cartesiano di tutti i valori
+        param_names = list(param_values.keys())
+        value_combinations = list(itertools.product(*[param_values[name] for name in param_names]))
+
+         # Converti in dizionari
+        for combo in value_combinations:
+            point = {param_names[i]: combo[i] for i in range(len(param_names))}
+            grid_points.append(point)
+        
+        return grid_points
+    
+    def _local_refinement(self, X, y, best_params, radius=0.1, n_points=5):
+        # fase di raffinamento locale attorno ai parametri migliori
+        print(f"\nRaffinamento attorno a:")
+        for param, value in best_params.items():
+            if param != 'cv_seed':
+                print(f"{param}: {value}")
+        refined_ranges = {}
+
+        # definisco range ristretti attorno ai migliori parametri
+        for param, value in best_params.items():
+            if param == 'cv_seed':
                 continue
-    
-        if not accuracies:  # Se tutti i trials hanno fallito
-            return 0, 0
-    
-        return np.mean(accuracies), np.std(accuracies)
-        
-    
-    def enhanced_dichotomic_search(self, param_ranges, n_iterations=3, trials_per_config=3):
-        """Ricerca dicotomica migliorata con più esplorazione"""
-        print("=" * 60)
-        print("RICERCA DICOTOMICA MIGLIORATA")
-        print("=" * 60)
-    
-        # Parametri fissi per la ricerca
-        fixed_params = {'algorithm': 'sgd', 'activation_type': 'sigmoid',
-        'loss_type': 'half_mse',
-        'epochs': 1000,'patience': 50
-        }
-    
-        for iteration in range(n_iterations):
-            print(f"\n{'='*40}")
-            print(f"Iterazione {iteration + 1}/{n_iterations}")
-            print(f"{'='*40}")
-        
-            # Per ogni parametro, testa 5 punti invece di 3
-            test_points = {}
-            for param, (low, high) in param_ranges.items():
-                if param in ['hidden_layers', 'batch_size']:
-                    # Per parametri interi
-                    points = [low, low + (high-low)//4, low + (high-low)//2, 
-                         low + 3*(high-low)//4, high]
-                    test_points[param] = [int(p) for p in points]
-                elif param == 'eta':
-                    # Scala logaritmica per eta
-                    low_log, high_log = np.log10(low), np.log10(high)
-                    points_log = np.linspace(low_log, high_log, 5)
-                    test_points[param] = [10**p for p in points_log]
-                else:
-                    # Per parametri float
-                    points = np.linspace(low, high, 5)
-                    test_points[param] = points.tolist()
-        
-            # Testa tutte le combinazioni
-            best_accuracy = -np.inf
-            best_point = None
-        
-            param_names = list(param_ranges.keys())
-            param_values = [test_points[p] for p in param_names]
-        
-            total_combinations = np.prod([len(v) for v in param_values])
-            print(f"Testando {total_combinations} combinazioni...")
-        
-            for i, combo in enumerate(itertools.product(*param_values)):
-                params = dict(zip(param_names, combo))
-                params.update(fixed_params)
-            
-                # Aggiungi struttura hidden layer complessa
-                hidden_layers = params.get('hidden_layers', 1)
-                hidden_neurons = params.get('hidden_neurons', 4)
-            
-                # Prova diverse strutture per lo stesso numero di neuroni totali
-                total_neurons = hidden_layers * hidden_neurons
-                structures_to_try = []
-            
-                # Genera diverse distribuzioni di neuroni
-                if hidden_layers == 1:
-                    structures_to_try = [[hidden_neurons]]
-                elif hidden_layers == 2:
-                    structures_to_try = [
-                    [hidden_neurons, hidden_neurons],
-                    [int(hidden_neurons*2), int(hidden_neurons//2)],
-                    [int(hidden_neurons//2), int(hidden_neurons*2)]
-                ]
-                else:  # 3+ layers
-                    structures_to_try = [
-                    [hidden_neurons] * hidden_layers,
-                    [int(hidden_neurons*2), hidden_neurons, int(hidden_neurons//2)],
-                    [int(hidden_neurons//2), hidden_neurons, int(hidden_neurons*2)]
-                ]
-            
-                for hidden_structure in structures_to_try:
-                    # Converti tutti i valori a interi
-                    hidden_structure = [int(n) for n in hidden_structure]
-                
-                    params_with_structure = params.copy()
-                    params_with_structure['hidden_structure'] = hidden_structure
-                
-                try:
-                    accuracy, std = self._evaluate_params(
-                        params_with_structure, 
-                        trials=trials_per_config
-                    )
-                    
-                    print(f"  Config {i+1}/{total_combinations}: "
-                          f"struttura={hidden_structure}, "
-                          f"eta={params['eta']:.4f}, "
-                          f"batch={params['batch_size']}, "
-                          f"acc={accuracy:.2f}% ± {std:.2f}")
-                    
-                    if accuracy > best_accuracy:
-                        best_accuracy = accuracy
-                        best_point = params_with_structure.copy()
-                        
-                        self.search_history.append({
-                            'params': params_with_structure.copy(),
-                            'accuracy': accuracy,
-                            'std': std,
-                            'iteration': iteration
-                        })
-                        
-                except Exception as e:
-                    print(f"  Config {i+1}/{total_combinations}: ERRORE - {e}")
-                    continue
-        
-        # AGGIUNGO QUESTO CONTROLLO: Se best_point è ancora None, crea un punto di default
-        if best_point is None:
-            print("Attenzione: nessuna configurazione valida trovata. Uso parametri di default.")
-            best_point = {
-                'eta': 0.1,
-                'batch_size': 8,
-                'hidden_layers': 2,
-                'hidden_neurons': 8,
-                'hidden_structure': [8, 4],
-                'algorithm': 'sgd',
-                'activation_type': 'sigmoid',
-                'loss_type': 'half_mse',
-                'epochs': 1000,
-                'patience': 50
-            }
-            best_accuracy = 0  # O qualche valore di default
-        
-        # Restringe i range in modo più intelligente
-        for param in param_ranges.keys():
-            # Usa il valore da best_point o un valore di default
-            if param in best_point:
-                current_val = best_point[param]
-            else:
-                # Calcola il punto medio del range
-                current_val = (param_ranges[param][0] + param_ranges[param][1]) / 2
-                
-            current_range = param_ranges[param]
-            
-            # Riduci il range del 60% invece del 50%
-            range_size = current_range[1] - current_range[0]
-            new_low = max(current_range[0], current_val - range_size * 0.3)
-            new_high = min(current_range[1], current_val + range_size * 0.3)
-            
-            if param in ['hidden_layers', 'batch_size']:
-                param_ranges[param] = [int(new_low), int(new_high)]
-            else:
-                param_ranges[param] = [new_low, new_high]
-        
-        print(f"\nMigliori parametri dopo iterazione {iteration + 1}:")
-        print(f"  Hidden structure: {best_point.get('hidden_structure', [])}")
-        print(f"  Eta: {best_point.get('eta', 0.1):.6f}")
-        print(f"  Batch size: {best_point.get('batch_size', 8)}")
-        print(f"  Accuracy: {best_accuracy:.2f}%")
-    
-    def aggressive_refinement(self, base_params, n_trials=20):
-        """Ricerca aggressiva intorno ai migliori parametri"""
-        print("\n" + "=" * 60)
-        print("RAFFINAMENTO AGGRESSIVO")
-        print("=" * 60)
-        
-        best_accuracy = -np.inf
-        best_params = base_params.copy()
-        
-        # Prova diverse combinazioni aggressive
-        algorithms = ['sgd', 'rprop', 'quickprop']
-        activations = ['sigmoid', 'tanh']
-        losses = ['half_mse', 'mae', 'huber', 'log_cosh']
-        
-        # Genera combinazioni random
-        for trial in range(n_trials):
-            params = base_params.copy()
-            
-            # Modifica i parametri in modo random
-            params['algorithm'] = np.random.choice(algorithms)
-            params['activation_type'] = np.random.choice(activations)
-            params['loss_type'] = np.random.choice(losses)
-            
-            # Modifica eta leggermente
-            if 'eta' in params:
-                params['eta'] = params['eta'] * np.random.uniform(0.8, 1.2)
-                params['eta'] = max(0.001, min(0.5, params['eta']))
-            
-            # Prova diverse strutture
-            current_structure = params.get('hidden_structure', [params.get('hidden_neurons', 4)])
-            new_structure = []
-            for neurons in current_structure:
-                # Modifica del ±25% e converti a int
-                new_neurons = int(neurons * np.random.uniform(0.75, 1.25))
-                new_neurons = max(2, min(32, new_neurons))
-                new_structure.append(int(new_neurons))  # Converti a int
-            
-            params['hidden_structure'] = new_structure
-            
-            # Aggiungi/rimuovi layer con probabilità 0.3
-            if np.random.random() < 0.3 and len(new_structure) < 5:
-                new_structure.append(np.random.randint(2, 16))
-                params['hidden_structure'] = new_structure
-            elif np.random.random() < 0.3 and len(new_structure) > 1:
-                params['hidden_structure'] = new_structure[:-1]
-            
-            # Valuta
-            accuracy, std = self._evaluate_params(params, trials=3)
-            
-            print(f"  Trial {trial+1}: "
-                  f"algo={params['algorithm']}, "
-                  f"act={params['activation_type']}, "
-                  f"loss={params['loss_type']}, "
-                  f"struttura={params['hidden_structure']}, "
-                  f"acc={accuracy:.2f}% ± {std:.2f}")
-            
-            if accuracy > best_accuracy:
-                best_accuracy = accuracy
-                best_params = params.copy()
-                
-                self.search_history.append({
-                    'params': params.copy(),
-                    'accuracy': accuracy,
-                    'std': std,
-                    'type': 'aggressive_refinement'
-                })
-        
-        # Aggiorna i migliori parametri globali
-        if best_accuracy > self.best_score:
-            self.best_score = best_accuracy
-            self.best_params = best_params
-        
-        return best_params
-    
-    def find_optimal_structure(self, n_explorations=10):
-        """Ricerca specifica per la struttura ottimale"""
-        print("\n" + "=" * 60)
-        print("RICERCA STRUTTURA OTTIMALE")
-        print("=" * 60)
-        
-        base_params = self.best_params.copy() if self.best_params else {
-            'eta': 0.1,
-            'batch_size': 8,
-            'algorithm': 'sgd',
-            'activation_type': 'sigmoid',
-            'loss_type': 'half_mse',
-            'epochs': 1500,
-            'patience': 50
-        }
-        
-        # Strutture da testare (basate sulla letteratura per Monk problems)
-        structures_to_test = [
-            [4],                    # 1 layer, 4 neuroni
-            [8],                    # 1 layer, 8 neuroni
-            [4, 4],                 # 2 layer, 4 neuroni ciascuno
-            [8, 4],                 # 2 layer, 8 e 4 neuroni
-            [4, 4, 4],              # 3 layer, 4 neuroni ciascuno
-            [8, 8, 4],              # 3 layer, 8, 8, 4 neuroni
-            [16, 8],                # 2 layer, 16 e 8 neuroni
-            [12, 6, 3],             # 3 layer, decrescente
-            [6, 12, 6],             # 3 layer, a forma di clessidra
-        ]
-        
-        best_accuracy = -np.inf
-        best_structure = None
-        
-        for i, structure in enumerate(structures_to_test):
-            params = base_params.copy()
-            params['hidden_structure'] = structure
-            
-            # Adatta eta in base alla complessità
-            complexity = sum(structure) / len(structure)
-            params['eta'] = max(0.01, min(0.2, 0.1 / np.sqrt(complexity)))
-            
-            accuracy, std = self._evaluate_params(params, trials=3)
-            
-            print(f"  Struttura {i+1}/{len(structures_to_test)}: {structure}")
-            print(f"    Accuracy: {accuracy:.2f}% ± {std:.2f}")
-            print(f"    Eta usato: {params['eta']:.4f}")
-            
-            if accuracy > best_accuracy:
-                best_accuracy = accuracy
-                best_structure = structure
-                base_params = params.copy()  # Usa i migliori parametri come base
-        
-        # Aggiorna i migliori parametri
-        if best_accuracy > self.best_score:
-            self.best_score = best_accuracy
-            self.best_params = base_params
-            self.best_params['hidden_structure'] = best_structure
-        
-        return best_structure
-    
-    def final_evaluation_with_cross_val(self, n_trials=300, n_folds=3):
-        """Valutazione finale con cross-validazione approssimata"""
-        print("\n" + "=" * 60)
-        print("VALUTAZIONE FINALE CON MULTIPLE TRIAL")
-        print("=" * 60)
-        
-        if not self.best_params:
-            print("Nessun parametro trovato. Usa default.")
-            self.best_params = {
-                'eta': 0.1,
-                'batch_size': 8,
-                'algorithm': 'rprop',
-                'activation_type': 'tanh',
-                'loss_type': 'half_mse',
-                'hidden_structure': [8, 4],
-                'epochs': 2000,
-                'patience': 100,
-                'l2_lambda': 0.0001,
-                'momentum': 0.9
-            }
-        
-        print(f"\nParametri ottimali trovati:")
-        for key, value in self.best_params.items():
-            if key not in ['network_structure', 'hidden_structure']:
-                print(f"  {key}: {value}")
-        
-        if 'hidden_structure' in self.best_params:
-            print(f"  Struttura hidden layers: {self.best_params['hidden_structure']}")
-            print(f"  Numero di hidden layers: {len(self.best_params['hidden_structure'])}")
-            print(f"  Neuroni per layer: {self.best_params['hidden_structure']}")
-        
-        # DEBUG: Stampa la forma dei dati
-        print(f"\nDEBUG - Forma dei dati:")
-        print(f"  X_train shape: {self.X_train.shape}")
-        print(f"  X_val shape: {self.X_val.shape}")
-        print(f"  X_test shape: {self.X_test.shape}")
-        accuracies_val = []
-        accuracies_test = []
-        
-        print(f"\nEseguendo {n_trials} trials...")
-        start_time = time.time()
-        
-        for trial in range(n_trials):
-            if (trial + 1) % 50 == 0:
-                elapsed = time.time() - start_time
-                remaining = elapsed / (trial + 1) * (n_trials - trial - 1)
-                print(f"  Trial {trial + 1}/{n_trials} - "
-                      f"Tempo rimanente: {remaining/60:.1f} min")
-            
-            # Costruisci struttura rete
-            input_size = self.X_train.shape[1]
-            output_size = self.y_train.shape[1] if len(self.y_train.shape) > 1 else 1
-            
-            network_structure = [input_size]
-            if 'hidden_structure' in self.best_params:
-                network_structure.extend(self.best_params['hidden_structure'])
-            else:
-                hidden_layers = self.best_params.get('hidden_layers', 2)
-                hidden_neurons = self.best_params.get('hidden_neurons', 8)
-                for _ in range(hidden_layers):
-                    network_structure.append(hidden_neurons)
-            network_structure.append(output_size)
-            print(f"  Trial {trial+1}: Struttura rete: {network_structure}")
-        
-            # DEBUG: Verifica che la struttura sia valida
-            if network_structure[0] != input_size:
-                print(f"  ERRORE: input_size mismatch! Rete attende {network_structure[0]}, dati hanno {input_size}")
-            continue
 
-            # Crea rete
-            net = nn.NeuralNetwork(
-                network_structure,
-                eta=self.best_params.get('eta', 0.1),
-                loss_type=self.best_params.get('loss_type', 'half_mse'),
-                algorithm=self.best_params.get('algorithm', 'sgd'),
-                activation_type=self.best_params.get('activation_type', 'sigmoid'),
-                l2_lambda=self.best_params.get('l2_lambda', 0.0),
-                momentum=self.best_params.get('momentum', 0.0),
-                weight_initializer=self.best_params.get('weight_initializer', 'def')
-            )
+            if param == 'learning_rate':
+                min_val = max(value * (1 - radius), 0.001)
+                max_val = min(value * (1 + radius), 1.0)
+            elif param == 'hidden_neurons':
+                min_val = max(value - 2, 1)
+                max_val = value + 2
+            elif param == 'epochs':
+                min_val = max(value - 50, 100)
+                max_val = value + 50
+            else:
+                min_val = value * 0.9
+                max_val = value * 1.1
             
-            # Allena
-            net.fit(
-                self.X_train, self.y_train,
-                self.X_val, self.y_val,
-                epochs=self.best_params.get('epochs', 2000),
-                batch_size=self.best_params.get('batch_size', 8),
-                patience=self.best_params.get('patience', 100),
-                verbose=False
-            )
+            refined_ranges[param] = (min_val, max_val)
+        
+         # Crea griglia fine
+        grid_points = self._grid_points(refined_ranges, n_points)
+        print(f"Punti di raffinamento: {len(grid_points)}")
+        
+        # Valuta tutti i punti
+        best_refined = {'params': None, 'val_mean': -np.inf, 'val_std': 0, 
+                       'train_mean': 0, 'train_std': 0}
+        
+        for i, params in enumerate(grid_points):
+            params['cv_seed'] = 99  # Seed fisso per raffinamento
+            if self.verbose:
+                print(f"\nRaffinamento [{i+1}/{len(grid_points)}] ", end="")
             
-            # Valuta
-            try:
-                y_pred_val = net.predict(self.X_val)
-                y_pred_test = net.predict(self.X_test)
+            val_mean, val_std, train_mean, train_std = self._evaluate_params(params, X, y)
             
-                if output_size == 1:  # Classificazione binaria
-                    y_pred_val_class = np.where(y_pred_val >= 0.5, 1, 0)
-                    y_pred_test_class = np.where(y_pred_test >= 0.5, 1, 0)
+            self.results.append({
+                'params': params.copy(),
+                'validation_mean_accuracy': val_mean,
+                'validation_std_accuracy': val_std,
+                'training_mean_accuracy': train_mean,
+                'training_std_accuracy': train_std,
+                'iteration': 'refinement'
+            })
+            
+            if val_mean > best_refined['val_mean']:
+                best_refined = {
+                    'params': params.copy(), 
+                    'val_mean': val_mean, 
+                    'val_std': val_std,
+                    'train_mean': train_mean,
+                    'train_std': train_std
+                }
+                if self.verbose:
+                    print(f"→ Migliore! (Val: {val_mean:.2f}%, Train: {train_mean:.2f}%)")
+        
+        return (best_refined['params'], best_refined['val_mean'], 
+                best_refined['val_std'], best_refined['train_mean'], best_refined['train_std'])
+
+    def _dichotomic_search(self, X, y, max_iteration=3, n_points=3):
+        print("\n" + "="*60)
+        print("RICERCA DICOTOMICA N-DIMENSIONALE")
+        print("="*60)
+
+        # range iniziali
+        current_ranges = {'learning_rate': tuple(self.lr_range), 
+                          'hidden_neurons': tuple(self.hidden_range),
+                          'epochs': tuple(self.epochs_range)
+                          }
+        best_overall = {'params': None, 'val_mean': -np.inf, 'val_std': 0,
+                       'train_mean': 0, 'train_std': 0}
+
+        for iteration in range(max_iteration):
+            print(f"\n{'='*60}")
+            print(f"ITERAZIONE {iteration + 1}")
+            print(f"{'='*60}")
+
+            print(f"Range attuali:")
+            for param, (min_val, max_val) in current_ranges.items():
+                print(f"  {param}: [{min_val:.4f}, {max_val:.4f}]")
+
+            # Genera punti della griglia
+            grid_points = self._grid_points(current_ranges, n_points)
+            print(f"Punti da testare: {len(grid_points)}")
+            
+            # Valuta tutti i punti
+            iteration_best = {'params': None, 'val_mean': -np.inf, 'val_std': 0,
+                             'train_mean': 0, 'train_std': 0}
+
+            for i, params in enumerate(grid_points):
+                # seed diverso per ogni iterazione
+                params['cv_seed'] = 42 + iteration
+                if self.verbose:
+                    print(f"\n[{i+1}/{len(grid_points)}] ", end="")
+                    for p, v in params.items():
+                        if p != 'cv_seed':
+                            print(f"{p}: {v} ", end="")
                 
-                    val_accuracy = np.mean(y_pred_val_class == self.y_val) * 100
-                    test_accuracy = np.mean(y_pred_test_class == self.y_test) * 100
-                else:  # Regressione
-                    val_accuracy = -np.sqrt(np.mean((y_pred_val - self.y_val) ** 2))
-                    test_accuracy = -np.sqrt(np.mean((y_pred_test - self.y_test) ** 2))
+                val_mean, val_std, train_mean, train_std = self._evaluate_params(params, X, y)
+                
+                self.results.append({
+                    'params': params.copy(),
+                    'validation_mean_accuracy': val_mean,
+                    'validation_std_accuracy': val_std,
+                    'training_mean_accuracy': train_mean,
+                    'training_std_accuracy': train_std,
+                    'iteration': iteration
+                })
+                
+                if val_mean > iteration_best['val_mean']:
+                    iteration_best = {
+                        'params': params.copy(), 
+                        'val_mean': val_mean, 
+                        'val_std': val_std,
+                        'train_mean': train_mean,
+                        'train_std': train_std
+                    }
+                    if self.verbose:
+                        print(f"  → Migliore! (Val: {val_mean:.1f}%, Train: {train_mean:.1f}%)")
             
-                accuracies_val.append(val_accuracy)
-                accuracies_test.append(test_accuracy)
-                print(f"  Trial {trial+1}: Val={val_accuracy:.2f}%, Test={test_accuracy:.2f}%")
+            print(f"\nMiglior combinazione iterazione {iteration + 1}:")
+            for param, value in iteration_best['params'].items():
+                if param != 'cv_seed':
+                    print(f"  {param}: {value}")
+            print(f"  Validation Accuracy: {iteration_best['val_mean']:.2f}% ± {iteration_best['val_std']:.2f}%")
+            print(f"  Training Accuracy: {iteration_best['train_mean']:.2f}% ± {iteration_best['train_std']:.2f}%")
+
+             # Aggiorna migliore globale
+            if iteration_best['val_mean'] > best_overall['val_mean']:
+                best_overall = iteration_best.copy()
+                print("  → Nuovo migliore globale!")
             
-            except Exception as e:
-                print(f"  ERRORE nel trial {trial+1}: {e}")
-            # Salta questo trial ma continua
-            continue
+            # Restringo i range attorno al punto migliore (del 30%)
+            new_ranges = {}
+            for param, (min_val, max_val) in current_ranges.items():
+                best_val = iteration_best['params'][param]
+                
+                # Calcolo nuovo range (restringe del 50% ogni iterazione)
+                range_width = max_val - min_val
+                new_min = max(best_val - range_width*0.15, min_val)
+                new_max = min(best_val + range_width*0.15, max_val)
+                
+                # Assicura che il range non diventi troppo piccolo
+                if param in ['hidden_neurons', 'epochs']:  
+                    if new_max - new_min < 2:
+                        new_min = max(best_val - 2, min_val)
+                        new_max = min(best_val + 2, max_val)
+                else:  # Parametri continui
+                    if new_max - new_min < 0.01:
+                        new_min = max(best_val - 0.01, min_val)
+                        new_max = min(best_val + 0.01, max_val)
+                
+                new_ranges[param] = (new_min, new_max)
+            
+            current_ranges = new_ranges
         
-        # Calcola statistiche
-        mean_val = np.mean(accuracies_val)
-        std_val = np.std(accuracies_val)
-        mean_test = np.mean(accuracies_test)
-        std_test = np.std(accuracies_test)
+        # Fase di raffinamento finale
+        print("\n" + "="*60)
+        print("RAFFINAMENTO FINALE")
+        print("="*60)
         
-        print("\n" + "=" * 60)
+        (refined_params, refined_val_mean, refined_val_std, 
+         refined_train_mean, refined_train_std) = self._local_refinement(
+            X, y, best_overall['params'], radius=0.1, n_points=5
+        )
+        
+        if refined_val_mean > best_overall['val_mean']:
+            best_overall = {
+                'params': refined_params,
+                'val_mean': refined_val_mean,
+                'val_std': refined_val_std,
+                'train_mean': refined_train_mean,
+                'train_std': refined_train_std
+            }
+            print("  → Parametri raffinati migliori dei precedenti!")
+
+        # Salva risultati finali
+        self.best_params = best_overall['params'].copy()
+        if 'cv_seed' in self.best_params:
+            del self.best_params['cv_seed']
+        
+        self.best_mean = best_overall['val_mean']
+        self.best_std = best_overall['val_std']
+        self.best_train_mean = best_overall['train_mean']
+        self.best_train_std = best_overall['train_std']
+        
+        self._print_results()
+        self._save_results()
+        
+        return (self.best_params, self.best_mean, self.best_std, 
+                self.best_train_mean, self.best_train_std)
+
+    def _print_results(self):
+        print("\n" + "="*60)
         print("RISULTATI FINALI")
-        print("=" * 60)
+        print("="*60)
         
-        print(f"\nParametri ottimali:")
-        for key, value in self.best_params.items():
-            if key not in ['network_structure']:
-                print(f"  {key}: {value}")
+        if self.best_params:
+            print(f"\nPARAMETRI OTTIMALI:")
+            for param, value in self.best_params.items():
+                print(f"  {param:15s}: {value}")
+            print(f"\n  Training Accuracy: {self.best_train_mean:.2f}% ± {self.best_train_std:.2f}%")
+            print(f"  Validation Accuracy: {self.best_mean:.2f}% ± {self.best_std:.2f}%")
+            print(f"  Gap (Train-Val): {self.best_train_mean - self.best_mean:.2f}%")
+            print(f"  Test totali: {len(self.results)}")
+    
+    def _save_results(self):
+        if not self.best_params:
+            return
         
-        print(f"\nStruttura della rete:")
-        print(f"  Input: {input_size} neuroni")
-        if 'hidden_structure' in self.best_params:
-            for i, neurons in enumerate(self.best_params['hidden_structure']):
-                print(f"  Hidden layer {i+1}: {neurons} neuroni")
-        print(f"  Output: {output_size} neuroni")
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        filepath = os.path.join(self.results_dir, f"nd_dichotomic_{timestamp}.json")
         
-        print(f"\nPerformance su Validation Set ({n_trials} trials):")
-        print(f"  Accuracy media: {mean_val:.2f}%")
-        print(f"  Deviazione standard: {std_val:.2f}%")
-        print(f"  Min: {np.min(accuracies_val):.2f}%")
-        print(f"  Max: {np.max(accuracies_val):.2f}%")
+        data_to_save = {
+            'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'best_params': self.best_params,
+            'training_accuracy': float(self.best_train_mean),
+            'training_std': float(self.best_train_std),
+            'validation_accuracy': float(self.best_mean),
+            'validation_std': float(self.best_std),
+            'accuracy_gap': float(self.best_train_mean - self.best_mean),
+            'search_type': 'nd_dichotomic',
+            'initial_ranges': {
+                'learning_rate': self.lr_range,
+                'hidden_neurons': self.hidden_range,
+                'epochs': self.epochs_range
+            },
+            'total_tests': len(self.results)
+        }
         
-        print(f"\nPerformance su Test Set ({n_trials} trials):")
-        print(f"  Accuracy media: {mean_test:.2f}%")
-        print(f"  Deviazione standard: {std_test:.2f}%")
-        print(f"  Min: {np.min(accuracies_test):.2f}%")
-        print(f"  Max: {np.max(accuracies_test):.2f}%")
+        with open(filepath, 'w') as f:
+            json.dump(data_to_save, f, indent=2)
         
-        # Calcola intervallo di confidenza 95%
-        ci_val = 1.96 * std_val / np.sqrt(n_trials)
-        ci_test = 1.96 * std_test / np.sqrt(n_trials)
+        print(f"\nRisultati salvati in: {filepath}")
+
+    def run_trials(self, X_train, y_train, X_test, y_test, n_trials=500, 
+                   save_results=True, results_filename='trials_results.json'):
+        """
+        Esegue n_trials con i parametri ottimali trovati
+        Calcola training accuracy e test accuracy con le loro deviazioni standard
+        """
+        if self.best_params is None:
+            print("Errore: Nessun parametro ottimale trovato. Esegui prima la ricerca dicotomica.")
+            return None
         
-        print(f"\nIntervalli di confidenza 95%:")
-        print(f"  Validation: ({mean_val-ci_val:.2f}%, {mean_val+ci_val:.2f}%)")
-        print(f"  Test: ({mean_test-ci_test:.2f}%, {mean_test+ci_test:.2f}%)")
+        print("\n" + "="*60)
+        print(f"ESECUZIONE DI {n_trials} TRIAL")
+        print("="*60)
+        
+        import neural_network as nn
+        
+        train_accuracies = []
+        test_accuracies = []
+        times = []
+        
+        print(f"Parametri usati per {n_trials} trial:")
+        for param, value in self.best_params.items():
+            print(f"  {param}: {value}")
+        
+        print(f"\nInizio {n_trials} addestramenti...")
+        
+        for i in range(n_trials):
+            trial_start_time = time.time()
+            
+            if (i + 1) % 5 == 0:
+                print(f"  Trial {i+1}/{n_trials}...")
+            
+            # Crea rete con struttura dai parametri ottimali
+            input_size = X_train.shape[1]
+            structure = [input_size, self.best_params['hidden_neurons'], 1]
+            net = nn.NeuralNetwork(structure, eta=self.best_params['learning_rate'])
+            
+            # Imposto tanh e inizializzazione Xavier
+            for layer_idx, layer in enumerate(net.layers):
+                if layer_idx == 0:  # Input layer 
+                    continue
+                for neuron in layer:
+                    # Cambia a tanh
+                    neuron.activation_function_type = "tanh"
+                    
+                    # Inizializzazione Xavier per tanh
+                    n_inputs = len(neuron.weights)
+                    if n_inputs > 0:
+                        limit = np.sqrt(6.0 / (n_inputs + 1))
+                        neuron.weights = np.random.uniform(-limit, limit, n_inputs)
+                    neuron.bias = 0.0
+            
+            # Allena la rete
+            net.fit(X_train, X_test, y_train, y_test, 
+                    epochs=self.best_params['epochs'], verbose=False)
+            
+            # Calcola training accuracy
+            train_predictions = net.predict(X_train)
+            train_pred_classes = (train_predictions >= 0.5).astype(int)
+            train_accuracy = np.mean(train_pred_classes == y_train) * 100
+            train_accuracies.append(train_accuracy)
+            
+            # Calcola test accuracy
+            test_predictions = net.predict(X_test)
+            test_pred_classes = (test_predictions >= 0.5).astype(int)
+            test_accuracy = np.mean(test_pred_classes == y_test) * 100
+            test_accuracies.append(test_accuracy)
+            
+            # Tempo del trial
+            trial_time = time.time() - trial_start_time
+            times.append(trial_time)
+        
+        # Calcola statistiche per training accuracy
+        mean_train_acc = np.mean(train_accuracies)
+        std_train_acc = np.std(train_accuracies)
+        min_train_acc = np.min(train_accuracies)
+        max_train_acc = np.max(train_accuracies)
+        
+        # Calcola statistiche per test accuracy
+        mean_test_acc = np.mean(test_accuracies)
+        std_test_acc = np.std(test_accuracies)
+        min_test_acc = np.min(test_accuracies)
+        max_test_acc = np.max(test_accuracies)
+        
+        # Calcola gap medio tra training e test
+        accuracy_gaps = [train_acc - test_acc for train_acc, test_acc in zip(train_accuracies, test_accuracies)]
+        mean_gap = np.mean(accuracy_gaps)
+        std_gap = np.std(accuracy_gaps)
+        
+        total_time = np.sum(times)
+        
+        print(f"\n{'='*60}")
+        print(f"STATISTICHE SU {n_trials} TRIAL")
+        print(f"{'='*60}")
+        print(f"Tempo totale: {total_time:.1f} secondi")
+        print(f"Tempo medio per trial: {np.mean(times):.1f} secondi")
+        
+        print(f"\n{'─'*60}")
+        print(f"TRAINING ACCURACY:")
+        print(f"{'─'*60}")
+        print(f"Media: {mean_train_acc:.2f}%")
+        print(f"Deviazione standard: {std_train_acc:.2f}%")
+        print(f"Minimo: {min_train_acc:.2f}%")
+        print(f"Massimo: {max_train_acc:.2f}%")
+        print(f"Range: [{mean_train_acc - std_train_acc:.2f}%, {mean_train_acc + std_train_acc:.2f}%]")
+        
+        print(f"\n{'─'*60}")
+        print(f"TEST ACCURACY:")
+        print(f"{'─'*60}")
+        print(f"Media: {mean_test_acc:.2f}%")
+        print(f"Deviazione standard: {std_test_acc:.2f}%")
+        print(f"Minimo: {min_test_acc:.2f}%")
+        print(f"Massimo: {max_test_acc:.2f}%")
+        print(f"Range: [{mean_test_acc - std_test_acc:.2f}%, {mean_test_acc + std_test_acc:.2f}%]")
+        
+        print(f"\n{'─'*60}")
+        print(f"GAP TRAINING-TEST:")
+        print(f"{'─'*60}")
+        print(f"Gap medio (Train - Test): {mean_gap:.2f}%")
+        print(f"Deviazione standard del gap: {std_gap:.2f}%")
+        print(f"Range gap: [{mean_gap - std_gap:.2f}%, {mean_gap + std_gap:.2f}%]")
+        
+        # Salva risultati dei trial
+        if save_results:
+            trials_data = {
+                'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                'n_trials': n_trials,
+                'best_params': self.best_params,
+                'training_accuracies': train_accuracies,
+                'test_accuracies': test_accuracies,
+                'accuracy_gaps': accuracy_gaps,
+                'times': times,
+                'statistics': {
+                    'training_accuracy': {
+                        'mean': float(mean_train_acc),
+                        'std': float(std_train_acc),
+                        'min': float(min_train_acc),
+                        'max': float(max_train_acc)
+                    },
+                    'test_accuracy': {
+                        'mean': float(mean_test_acc),
+                        'std': float(std_test_acc),
+                        'min': float(min_test_acc),
+                        'max': float(max_test_acc)
+                    },
+                    'accuracy_gap': {
+                        'mean': float(mean_gap),
+                        'std': float(std_gap)
+                    },
+                    'time': {
+                        'total': float(total_time),
+                        'avg_per_trial': float(np.mean(times))
+                    }
+                }
+            }
+
+            filepath = os.path.join(self.results_dir, results_filename)
+            with open(filepath, 'w') as f:
+                json.dump(trials_data, f, indent=2)
+            
+            print(f"\nRisultati dei trial salvati in: {filepath}")
         
         return {
-            'best_params': self.best_params,
-            'val_mean': mean_val,
-            'val_std': std_val,
-            'test_mean': mean_test,
-            'test_std': std_test,
-            'val_accuracies': accuracies_val,
-            'test_accuracies': accuracies_test
+            'training_accuracy': {
+                'mean': mean_train_acc,
+                'std': std_train_acc,
+                'min': min_train_acc,
+                'max': max_train_acc,
+                'values': train_accuracies
+            },
+            'test_accuracy': {
+                'mean': mean_test_acc,
+                'std': std_test_acc,
+                'min': min_test_acc,
+                'max': max_test_acc,
+                'values': test_accuracies
+            },
+            'accuracy_gap': {
+                'mean': mean_gap,
+                'std': std_gap,
+                'values': accuracy_gaps
+            },
+            'time': {
+                'total': total_time,
+                'avg_per_trial': np.mean(times)
+            }
         }
-
-
-def run_advanced_monk_search(monk_dataset=3):
-    """Ricerca avanzata per dataset Monk"""
-    # Carica dati
-    if monk_dataset == 1:
-        X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk1(
-            one_hot=True, dataset_shuffle=True
-        )
-    elif monk_dataset == 2:
-        X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk2(
-            one_hot=True, dataset_shuffle=True
-        )
-    else:
-        X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(
-            one_hot=True, dataset_shuffle=True
-        )
-    
-    print(f"\n{'='*60}")
-    print(f"DATASET MONK-{monk_dataset}")
-    print(f"{'='*60}")
-    print(f"Training samples: {len(X_train)}")
-    print(f"Validation samples: {len(X_val)}")
-    print(f"Test samples: {len(X_test)}")
-    print(f"Input features: {X_train.shape[1]}")
-    
-    # Normalizzazione
-    X_train_norm, X_val_norm, X_test_norm = data.normalize_dataset(
-        X_train, X_val, X_test, 0, 1
-    )
-    
-    # Inizializza grid search
-    search = GridSearch(
-        X_train_norm, y_train, 
-        X_val_norm, y_val, 
-        X_test_norm, y_test
-    )
-    
-    # FASE 1: Ricerca dicotomica migliorata
-    print("\n" + "="*60)
-    print("FASE 1: RICERCA DICOTOMICA MIGLIORATA")
-    print("="*60)
-    
-    param_ranges = {
-        'eta': [0.001, 0.3],           # Range più ampio
-        'batch_size': [4, 32],          # Batch size più ragionevole
-        'hidden_layers': [1, 3],        # Fino a 3 hidden layers
-        'hidden_neurons': [2, 16]       # Neuroni per layer
-    }
-    
-    search.enhanced_dichotomic_search(
-        param_ranges, 
-        n_iterations=2, 
-        trials_per_config=2
-    )
-    
-    # FASE 2: Ricerca struttura ottimale
-    optimal_structure = search.find_optimal_structure(n_explorations=15)
-    
-    # FASE 3: Raffinamento aggressivo
-    best_params = search.aggressive_refinement(
-        search.best_params, 
-        n_trials=25
-    )
-    
-    # FASE 4: Valutazione finale
-    results = search.final_evaluation_with_cross_val(
-        n_trials=300, 
-        n_folds=3
-    )
-    
-    return results
-
-
-if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser(description='Advanced Grid Search per Neural Network')
-    parser.add_argument('--dataset', type=str, default='monk3',
-                       choices=['monk1', 'monk2', 'monk3'],
-                       help='Dataset Monk da usare')
-    
-    args = parser.parse_args()
-    monk_num = int(args.dataset[-1])
-    
-    results = run_advanced_monk_search(monk_num)
-    
-    # Salva risultati
-    import json
-    with open(f'advanced_grid_search_monk{monk_num}.json', 'w') as f:
-        json.dump(results, f, indent=2)
-    
-    print(f"\nRisultati salvati in advanced_grid_search_monk{monk_num}.json")
-    
-    # Suggerimenti per miglioramenti ulteriori
-    print("\n" + "="*60)
-    print("SUGGERIMENTI PER MIGLIORARE:")
-    print("="*60)
-    print("1. Se l'accuracy è ancora bassa, prova ad aumentare gli epochs a 3000+")
-    print("2. Prova l'algoritmo 'rprop' con eta_plus=1.2, eta_minus=0.5")
-    print("3. Per Monk3 (con noise), aggiungi regolarizzazione L2 (0.001-0.01)")
-    print("4. Prova funzioni di attivazione 'tanh' con inizializzazione 'xavier'")
-    print("5. Considera early stopping più aggressivo (patience=20)")

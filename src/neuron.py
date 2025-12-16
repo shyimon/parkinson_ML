@@ -14,6 +14,8 @@ class Neuron:
         self.attached_neurons = []
         self.vel_w = np.zeros(num_inputs)
         self.vel_b = 0.0
+        self.best_weights = None
+        self.best_bias = None
 
         limit = 1 / math.sqrt(num_inputs) if num_inputs > 0 else 0.2
 
@@ -112,7 +114,15 @@ class Neuron:
         if algorithm == 'sgd':
             l2_lambda = kwargs.get('l2_lambda', 0.0)
             momentum = kwargs.get('momentum', 0.0)
+            grad_w = self.weight_grad_accum / batch_size
+            grad_b = self.bias_grad_accum / batch_size         
+            self.weights -= eta * (grad_w - l2_lambda * self.weights)
+            self.bias -= eta * grad_b
+            # Reset per SGD
+            self.weight_grad_accum.fill(0.0)
+            self.bias_grad_accum = 0.0
             # media del gradiente sul batch
+            '''
             grad_w = self.weight_grad_accum / batch_size
             grad_b = self.bias_grad_accum / batch_size  
 
@@ -127,7 +137,7 @@ class Neuron:
             # Reset accumulatori batch
             self.weight_grad_accum.fill(0.0)
             self.bias_grad_accum = 0.0 
-        
+            '''
         elif algorithm == 'rprop':
             eta_plus = kwargs.get('eta_plus', 1.2)
             eta_minus = kwargs.get('eta_minus', 0.5)
@@ -148,6 +158,14 @@ class Neuron:
     def update_weights(self, eta, l2_lambda=0.00):
         self.weights -= eta * (self.delta * self.inputs - l2_lambda * self.weights)
         self.bias -= eta * self.delta
+
+    def set_best_weights(self):
+        self.best_weights = self.weights
+        self.best_bias = self.bias
+
+    def restore_best_weights(self):
+        self.weights = self.best_weights
+        self.bias = self.best_bias
     
     def update_weights_rprop(self, batch_size, eta_plus=1.2, eta_minus=0.5, delta_min=1e-6, delta_max=50.0, l2_lambda=0.0):
         """

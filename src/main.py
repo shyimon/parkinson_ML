@@ -1,67 +1,62 @@
 import numpy as np
 import data_manipulation as data
-import grid_search
+import neural_network as nn
+from grid_search import GridSearch
 
 def main():
-    X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, 
-                            dataset_shuffle=True)
-    
-    print(f"Shape dei dati:")
-    print(f"  X_train: {X_train.shape}")
-    print(f"  y_train: {y_train.shape}")
-    print(f"  X_val: {X_val.shape}")
-    print(f"  X_test: {X_test.shape}")
-    
-    # Stampa il primo esempio per verifica
-    print(f"\nPrimo esempio X_train[0]:")
-    print(f"  Valori: {X_train[0]}")
-    print(f"  Tipo: {type(X_train[0])}")
-    print(f"  Dtype: {X_train[0].dtype}")
-    
-    # Verifica se ci sono NaN
-    print(f"\nControllo NaN:")
-    print(f"  NaN in X_train: {np.isnan(X_train).any()}")
-    print(f"  NaN in y_train: {np.isnan(y_train).any()}")
+    print("\n[1] Caricamento dataset MONK3...")
+    X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
 
-    # Normalizzo
-    X_train_norm, X_val_norm, X_test_norm = data.normalize_dataset(
-            X_train, X_val, X_test, 0, 1
-    )
+    print(f"  Training set: {X_train.shape}")
+    print(f"  Test set: {X_test.shape}")
+    
+    print("\n[2] Esecuzione Grid Search...")
+    print("-"*70)
+
+    # Normalization
+    # X_train_normalized = data.normalize(X_train, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
+    # X_test_normalized = data.normalize(X_test, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
+    X_train_normalized = np.concatenate(X_train, X_val)
+    y_test = np.concatenate(y_train, y_val)
+    X_test_normalized = X_test
+
+    gs = GridSearch(cv_folds=5, verbose=True, results_dir='grid_search_results')
    
-     # Esegui ricerca dicotomica
-    results = grid_search.run_advanced_monk_search(3)
-    
-    # uso i parametri migliori per un training finale
-    best_params = results['best_params']
-    
-    print("\n" + "="*60)
-    print("CONFIGURAZIONE CONSIGLIATA:")
-    print("="*60)
-    
-    # Costruisco la struttura della rete
-    input_size = X_train.shape[1]
-    output_size = 1
-    
-    network_structure = [input_size]
-    if 'hidden_structure' in best_params:
-        network_structure.extend(best_params['hidden_structure'])
-    network_structure.append(output_size)
-    
-    print(f"\nStruttura rete: {network_structure}")
-    print(f"\nParametri di training:")
-    print(f"  eta (learning rate): {best_params.get('eta', 0.1)}")
-    print(f"  batch_size: {best_params.get('batch_size', 8)}")
-    print(f"  algorithm: {best_params.get('algorithm', 'sgd')}")
-    print(f"  activation_type: {best_params.get('activation_type', 'sigmoid')}")
-    print(f"  loss_type: {best_params.get('loss_type', 'half_mse')}")
-    print(f"  epochs: {best_params.get('epochs', 2000)}")
-    print(f"  patience: {best_params.get('patience', 100)}")
-    
-    if 'l2_lambda' in best_params and best_params['l2_lambda'] > 0:
-        print(f"  l2_lambda (regolarizzazione): {best_params['l2_lambda']}")
-    
-    if 'momentum' in best_params and best_params['momentum'] > 0:
-        print(f"  momentum: {best_params['momentum']}")
+    best_params, cv_val_acc, cv_val_std, cv_train_acc, cv_train_std = gs._dichotomic_search(
+        X_train_normalized, y_train,
+        max_iteration=4,
+        n_points=5
+    )
 
+    num_trials = 500
+    print("="*70)
+    print(f"GRID SEARCH + {num_trials} TRIAL SU MONK1")
+    print("="*70)
+
+    print(f"\n[3] {num_trials} Trial con parametri ottimali")
+    print("-"*70)
+    
+    trials_results = gs.run_trials(
+        X_train_normalized, y_train, X_test_normalized, y_test,
+        n_trials=200,
+        save_results=True,
+        results_filename='trials_results.json'
+    )
+    
+    print("\n" + "="*70)
+    print("RISULTATO FINALE MONK 1")
+    print("="*70)
+    print(f"Parametri ottimali: lr={best_params['learning_rate']:.4f}, hidden={best_params['hidden_neurons']}, epochs={best_params['epochs']}, Training Accuracy:   {cv_train_acc:.2f}% ± {cv_train_std:.2f}%, Validation Accuracy: {cv_val_acc:.2f}% ± {cv_val_std:.2f}")
+    
+      
+    if trials_results:
+        print(f"\n{num_trials} Trial indipendenti:")
+        print(f"  Training Accuracy: {trials_results['training_accuracy']['mean']:.2f}% ± {trials_results['training_accuracy']['std']:.2f}%")
+        print(f"  Test Accuracy:     {trials_results['test_accuracy']['mean']:.2f}% ± {trials_results['test_accuracy']['std']:.2f}%")
+        print(f"  Gap medio (Train-Test): {trials_results['accuracy_gap']['mean']:.2f}% ± {trials_results['accuracy_gap']['std']:.2f}%")
+        print(f"  Tempo totale: {trials_results['time']['total']:.1f} secondi")
+
+    # net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0001, algorithm="sgd", activation_type="sigmoid", eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.0001, weight_initializer="def", momentum=0.9)
+    # net.fit(X_train_normalized, y_train, X_val_normalized, y_val, epochs=2000, batch_size=4, patience=50)
 if __name__ == "__main__":
     main()

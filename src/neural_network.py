@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import utils
 import neuron
+from joblib import Parallel, delayed
+
 
 class NeuralNetwork:
     # Constructor
@@ -18,10 +20,12 @@ class NeuralNetwork:
         self.eta_minus = kwargs.get("eta_minus", 0.5)
         self.weight_initializer = kwargs.get("weight_initializer", "def")
         self.mu = kwargs.get("mu", 1.75)
-        self.decay = kwargs.get("decay", 0.001)
         self.loss_history = {"training": [], "validation": []}
         self.layers = []
         self.momentum = kwargs.get("momentum", 0.0) # Implementazione momentum
+        self.best_val_loss = np.inf
+        self.lr_wait = 0
+        self.decay = kwargs.get("decay", 0.9)
 
         self.debug = kwargs.get("debug", False)
 
@@ -47,6 +51,10 @@ class NeuralNetwork:
 
    
     def forward(self, x):
+        for l in range(len(self.layers) - 1):
+            x = [n.feed_neuron(x) for n in self.layers[l + 1]]
+        return np.array(x, dtype="float")
+
         """Propagazione in avanti. x: singolo esempio (1D) o batch (2D)"""
         # Converti in array numpy
         x = np.array(x, dtype=float)
@@ -144,7 +152,7 @@ class NeuralNetwork:
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
-    def fit(self, X_train, y_train, X_val, y_val, epochs=1000, batch_size=1, patience=10, verbose=True):
+    def fit(self, X_train, y_train, X_val, y_val, epochs=1000, batch_size=1, patience=20, verbose=True):
 
         patience_level = patience
 
@@ -163,32 +171,29 @@ class NeuralNetwork:
                 # Reset accumulators
                 self._reset_gradients()
 
-                batch_loss = 0.0
-
                 # Accumulate gradients inside the batch
                 for i in range(start_idx, end_idx):
                     xi = X_train[i]
                     yi = y_train[i]
 
                     y_pred = self.forward(xi)
-                    batch_loss += np.sum(self.compute_loss(yi, y_pred, loss_type=self.loss_type))
-
                     err = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
                     self.backward(err, accumulate=True)
 
                 #apply accumulated gradient once
                 self._apply_accumulated_gradients(batch_size=current_batch_size)
-                total_loss += batch_loss
-            
-            #Training loss (media per esempio)
-            avg_loss = total_loss / len(X_train)
-            self.loss_history["training"].append(avg_loss)
+
+            # Training loss    
+            y_pred_train = self.predict(X_train)
+            train_loss_epoch = np.sum(self.compute_loss(y_train, y_pred_train)) / len(X_train)
+            self.loss_history["training"].append(train_loss_epoch)
 
             #Validation loss (non tocca i pesi)
             y_pred_val = self.predict(X_val)
             val_loss = np.sum(self.compute_loss(y_val, y_pred_val, loss_type=self.loss_type))
             avg_val_loss = val_loss / len(y_val)
             self.loss_history["validation"].append(avg_val_loss)
+            self._update_lr_on_plateau(avg_val_loss)
 
             #early stopping su validation
             if epoch >= patience:
@@ -197,42 +202,21 @@ class NeuralNetwork:
                 else:
                     patience_level = patience
                 if patience_level == 0:
+                    for layer in self.layers: # restore best parameters
+                        for neuron in layer:
+                            neuron.restore_best_weights()
                     if verbose:
-                        print(f"Early stopping. Last epoch {epoch}, Train Loss: {avg_loss:.4f}, "
+                        print(f"Early stopping. Last epoch {epoch}, Train Loss: {train_loss_epoch:.4f}, "
                           f"Val Loss: {avg_val_loss:.4f}, Batch size: {batch_size}")
                     break       
-                    
+
+            for layer in self.layers: # restore best parameters
+                for neuron in layer:
+                    neuron.restore_best_weights()
 
             if epoch % 25 == 0 and verbose:
                 print(f"Epoch {epoch}, Loss: {avg_loss:.4f}, Batch size: {batch_size}\nValidation Loss: {avg_val_loss:.4f}\n")
-            return self.loss_history
-
-    def validate_structure(self):
-        """Valida che la struttura della rete sia coerente"""
-        print("\n=== VALIDAZIONE STRUTTURA RETE ===")
         
-        # Stampa informazioni sui layer
-        for i, layer in enumerate(self.layers):
-            print(f"Layer {i}: {len(layer)} neuroni")
-            
-            if i > 0:  # Non il layer di input
-                # Verifica un neurone campione
-                if len(layer) > 0:
-                    sample_neuron = layer[0]
-                    expected_input_size = len(self.layers[i-1])
-                    actual_input_size = sample_neuron.weights.shape[0]
-                    
-                    print(f"  Primo neurone: pesi shape = {sample_neuron.weights.shape}")
-                    print(f"  Input atteso dal layer precedente: {expected_input_size}")
-                    print(f"  Input effettivo del neurone: {actual_input_size}")
-                    
-                    if actual_input_size != expected_input_size:
-                        print(f"  ⚠️ ERRORE: Mismatch!")
-                        return False
-        
-        print("✓ Struttura valida")
-        return True
-       
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
         """
         Calcola la loss in base al tipo specificato.
