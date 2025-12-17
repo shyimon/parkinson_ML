@@ -2,6 +2,7 @@ import numpy as np
 import data_manipulation as data
 import neural_network as nn
 import itertools
+import os
 from tqdm import tqdm
 from joblib import Parallel, delayed
 import contextlib
@@ -20,10 +21,11 @@ def tqdm_joblib(tqdm_object):
     try:
         yield tqdm_object
     finally:
-        joblib.parallel.Batch
+        joblib.parallel.BatchCompletionCallBack = old_callback
+        tqdm_object.close()
 
 def main():
-    X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
+    X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk1(one_hot=True, dataset_shuffle=True)
 
     # Normalization
     # X_train_normalized = data.normalize(X_train, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
@@ -34,18 +36,30 @@ def main():
 
     batch_size = [1 << i for i in range(X_train_normalized.shape[0].bit_length())]
     batch_size.append(X_train_normalized.shape[0])
-
-    param_grid = {
-        "batch_size": [1, 2, 8, 32, X_train_normalized.shape[0]],
+    
+    
+    '''    param_grid = {
+        "batch_size": [1, 2, 8, 16, X_train_normalized.shape[0]],
         "algorithm": ["sgd", "rprop", "quickprop"],
         "eta": [0.7, 0.9],
-        "network_structure": [[2], [3], [4],
-                            [4, 2]],
-        "decay": [0.9, 0.8],
+        "network_structure": [[2], [3], [4]],
+        "decay": [0.9, 0.75],
+        "loss_type": ["half_mse", "mae"],
+        "l2_reg": [0.0, 0.000001, 0.00001, 0.0001],
+        "activation": ["sigmoid", "tanh"],
+        "weight_init": ["xavier", "def"]
+    }'''
+
+    param_grid = {
+        "batch_size": [1, 8],
+        "algorithm": ["sgd"],
+        "eta": [0.7],
+        "network_structure": [[2], [3], [4]],
+        "decay": [0.9],
         "loss_type": ["half_mse", "mae"],
         "l2_reg": [0.0, 0.000001, 0.00001],
         "activation": ["sigmoid", "tanh"],
-        "weight_init": ["xavier", "def"]
+        "weight_init": ["def"]
     }
 
     param_combinations = list(itertools.product(
@@ -71,9 +85,8 @@ def main():
     ]
 
     print(f"Running {len(grid_args)} grid points in parallel...")
-
     with tqdm_joblib(tqdm(total=len(grid_args), desc="Grid search")):
-        all_results = Parallel(n_jobs=-1)(
+        all_results = Parallel(n_jobs=4)(
             delayed(evaluate_grid_point)(args)
             for args in grid_args
         )
@@ -117,7 +130,7 @@ def main():
     y_val,
     epochs=2000,
     batch_size=best["batch_size"],
-    patience=50,
+    patience=20,
     verbose=False
     )
     
@@ -166,17 +179,14 @@ def run_single_experiment(X_train, y_train, X_val, y_val, batch_size, algorithm,
     net.fit(X_train, y_train, X_val, y_val, batch_size=batch_size, patience=10, verbose=False)
     return net.best_val_loss
 
-def evaluate_configuration(X_train, y_train, X_val, y_val, batch_size, algorithm, eta, hidden_layers, decay, loss_type, l2_reg, activation, weight_init, n_jobs=4):
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(run_single_experiment)(
+def evaluate_configuration(X_train, y_train, X_val, y_val, batch_size, algorithm, eta, hidden_layers, decay, loss_type, l2_reg, activation, weight_init):
+    results = []
+    for i in range(3):
+        results.append(run_single_experiment(
             X_train, y_train, X_val, y_val,
             batch_size, algorithm, eta,
             hidden_layers, decay, loss_type,
-            l2_reg, activation, weight_init,
-        )
-        for i in range(1)
-    )
-
+            l2_reg, activation, weight_init))
     return np.median(results), results
 
 def evaluate_grid_point(args):
