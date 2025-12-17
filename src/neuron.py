@@ -73,18 +73,16 @@ class Neuron:
         if inputs is None:
             print(f"ERROR: inputs is None! Neuron: layer index {self.index_in_layer}, is_output: {self.is_output_neuron}")
             raise ValueError("Inputs cannot be None")
-    
-        inputs = np.array(inputs, dtype=float).flatten()
-    
+
+        # Assicurati che inputs sia un array numpy
+        self.inputs = np.asarray(inputs, dtype=float).flatten()
+
         # Debug: verifica la dimensione
-        if inputs.shape[0] != self.weights.shape[0]:
-            print(f"DEBUG feed_neuron: inputs shape {inputs.shape}, weights shape {self.weights.shape}")
+        if self.inputs.shape[0] != self.weights.shape[0]:
+            print(f"DEBUG feed_neuron: inputs shape {self.inputs.shape}, weights shape {self.weights.shape}")
             print(f"  Neuron: layer index {self.index_in_layer}, is_output: {self.is_output_neuron}")
-            # Potrebbe essere un errore serio, ma per ora continuiamo
-            # raise ValueError(f"Dimension mismatch: inputs {inputs.shape[0]}, weights {self.weights.shape[0]}")
     
-        self.inputs = inputs
-        self.net = float(np.dot(self.weights, inputs)) + self.bias
+        self.net = float(np.dot(self.weights, self.inputs)) + self.bias
         self.output = self.activation_funct(self.net)
         return self.output
     
@@ -103,7 +101,9 @@ class Neuron:
     
     def accumulate_gradients(self):
         """Accumula gradienti invece di aggiornare immediatamente"""
-        self.weight_grad_accum += self.delta * self.inputs
+        # Assicurati che inputs sia un array numpy
+        inputs_array = np.asarray(self.inputs, dtype=float)
+        self.weight_grad_accum += self.delta * inputs_array
         self.bias_grad_accum += self.delta
     
     def reset_grad_accum(self):
@@ -122,23 +122,22 @@ class Neuron:
             l2_lambda = kwargs.get('l2_lambda', 0.0)
             momentum = kwargs.get('momentum', 0.0)
             grad_w = self.weight_grad_accum / batch_size
-            grad_b = self.bias_grad_accum / batch_size         
-            self.weights -= eta * (grad_w - l2_lambda * self.weights)
-            self.bias -= eta * grad_b
+            grad_b = self.bias_grad_accum / batch_size  
 
             if momentum > 0.0:
+                # Momentum
                 self.vel_w = momentum * self.vel_w + grad_w
                 self.vel_b = momentum * self.vel_b + grad_b
                 self.weights -= eta * (self.vel_w - l2_lambda * self.weights)
                 self.bias -= eta * self.vel_b
             else:
+                # SGD semplice
                 self.weights -= eta * (grad_w - l2_lambda * self.weights)
                 self.bias -= eta * grad_b
-
-            # Reset per SGD
-            self.weight_grad_accum.fill(0.0)
-            self.bias_grad_accum = 0.0
-            # media del gradiente sul batch
+        
+                # Reset accumulatori
+                self.weight_grad_accum.fill(0.0)
+                self.bias_grad_accum = 0.0
             '''
             grad_w = self.weight_grad_accum / batch_size
             grad_b = self.bias_grad_accum / batch_size  
@@ -173,7 +172,28 @@ class Neuron:
             self.reset_grad_accum() # Resetta gli accumuli dell'aggiornamento dei pesi per il prossimo batch
 
     def update_weights(self, eta, l2_lambda=0.00):
-        self.weights -= eta * (self.delta * self.inputs - l2_lambda * self.weights)
+        # DEBUG: stampa per vedere cosa c'è
+        print(f"DEBUG update_weights: delta={self.delta}, inputs={self.inputs}")
+        print(f"  weights shape: {self.weights.shape}")
+    
+        # Assicurati che inputs sia un array numpy
+        if self.inputs is None:
+            print("ERROR: self.inputs is None!")
+            return
+    
+        inputs_array = np.asarray(self.inputs, dtype=float).flatten()
+        print(f"  inputs_array shape: {inputs_array.shape}")
+    
+        # Verifica che le dimensioni corrispondano
+        if inputs_array.shape[0] != self.weights.shape[0]:
+            print(f"ERROR: Dimension mismatch! inputs: {inputs_array.shape[0]}, weights: {self.weights.shape[0]}")
+            # Correggi: resetta inputs
+            self.inputs = np.zeros(self.weights.shape[0])
+            inputs_array = self.inputs
+    
+        # Calcola l'aggiornamento
+        weight_update = self.delta * inputs_array - l2_lambda * self.weights
+        self.weights -= eta * weight_update
         self.bias -= eta * self.delta
 
     def set_best_weights(self):

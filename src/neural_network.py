@@ -21,7 +21,8 @@ class NeuralNetwork:
         self.weight_initializer = kwargs.get("weight_initializer", "def")
         self.mu = kwargs.get("mu", 1.75)
         self.loss_history = {"training": [], "validation": []}
-        self.layers = []
+        self.layers = [] # layer 0: input (vuoto)
+        self.layers.append([])
         self.momentum = kwargs.get("momentum", 0.0) # Implementazione momentum
         self.best_val_loss = np.inf
         self.lr_wait = 0
@@ -29,25 +30,45 @@ class NeuralNetwork:
 
         self.debug = kwargs.get("debug", False)
 
-        # CONVERTO TUTTI GLI ELEMENTI A INTERI
-        self.network_structure = [int(n) for n in network_structure]
-
-        # Layer di input 
-        self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
-            activation_function_type=self.activation_type, is_output_neuron=False, 
-            weight_initializer=self.weight_initializer) 
-            for j in range(self.network_structure[0])])
-        
-        for i in range(len(self.network_structure) - 1):
-            self.layers.append([neuron.Neuron(num_inputs=self.network_structure[i], 
-                    index_in_layer=j, activation_function_type=self.activation_type, 
-                    is_output_neuron=(i==len(self.network_structure)-2), 
-                    weight_initializer=self.weight_initializer) 
-                    for j in range(self.network_structure[i + 1])])
-
-        for l in range(len(self.layers) - 1):
-            for n in self.layers[l]:
-                n.attach_to_output(self.layers[l + 1])
+        # Crea il primo hidden layer
+        if len(network_structure) > 2:  # Se ci sono hidden layers
+            for i in range(1, len(network_structure) - 1):
+                layer_size = network_structure[i]
+                prev_layer_size = network_structure[i-1]
+            
+                layer = []
+                for j in range(layer_size):
+                    n = neuron.Neuron(
+                        num_inputs=prev_layer_size,
+                        index_in_layer=j,
+                        activation_function_type=self.activation_type,
+                        is_output_neuron=False,  # Hidden neurons
+                        weight_initializer=self.weight_initializer
+                    )
+                    layer.append(n)
+                self.layers.append(layer)
+    
+        # Crea l'output layer
+        output_layer_size = network_structure[-1]
+        prev_layer_size = network_structure[-2] if len(network_structure) > 1 else network_structure[0]
+    
+        output_layer = []
+        for j in range(output_layer_size):
+            n = neuron.Neuron(
+                num_inputs=prev_layer_size,
+                index_in_layer=j,
+                activation_function_type=self.activation_type,
+                is_output_neuron=True,  # Output neurons
+                weight_initializer=self.weight_initializer
+            )
+            output_layer.append(n)
+        self.layers.append(output_layer)
+    
+        # Collega i neuroni (solo se ci sono almeno 2 layer con neuroni)
+        if len(self.layers) > 2:
+            for l in range(1, len(self.layers) - 1):
+                for n in self.layers[l]:
+                    n.attach_to_output(self.layers[l + 1])
 
    
     def forward(self, x):
@@ -55,37 +76,27 @@ class NeuralNetwork:
         Propagazione in avanti per un singolo esempio.
         x: array 1D o 2D
         """
+        # se è un batch, usa predict
         if len(x.shape) > 1:
             return self.predict(x)
+        
         # Assicurati che x sia un array 1D
         x = np.array(x, dtype=float).flatten()
-    
-        # DEBUG
-        if self.debug:
-            print(f"DEBUG forward: input = {x[:3]}... (shape: {x.shape})")
-    
-        # Inizia con l'input
+        
+        # l'input va direttamente al primo layer con neuroni (layer 1)
         current_values = x
-    
-        # Propaga attraverso TUTTI i layer, partendo dal PRIMO HIDDEN LAYER (indice 1)
+        
+        # Propaga attraverso tutti i layer con neuroni (partendo da 1)
         for layer_idx in range(1, len(self.layers)):
             layer_output = []
-        
-            if self.debug:
-                print(f"DEBUG forward: Layer {layer_idx}, {len(self.layers[layer_idx])} neuroni")
-                print(f"  Input al layer: shape = {current_values.shape}")
-        
+
             for neuron in self.layers[layer_idx]:
-                # Ogni neurone riceve TUTTI i valori del layer precedente
                 output = neuron.feed_neuron(current_values)
                 layer_output.append(output)
-        
-            # L'output di questo layer diventa l'input per il prossimo
+            
+            # l'output di questo layer diventa l'input per il prossimo
             current_values = np.array(layer_output, dtype=float)
-        
-            if self.debug:
-                print(f"  Output dal layer: shape = {current_values.shape}")
-    
+
         return current_values
     
     # streamlines and encapsulates the forwarding of multiple examples
@@ -125,16 +136,30 @@ class NeuralNetwork:
     # backprop implementation
     def backward(self, error_signals, accumulate=False):
         """Versione modificata per supportare accumulazione"""
-        if np.isscalar(error_signals) or (isinstance(error_signals, np.ndarray) and error_signals.ndim == 0):
+        # Se error_signals è uno scalare, convertilo in lista
+        if np.isscalar(error_signals):
             error_signals = [error_signals]
-        
+        elif isinstance(error_signals, np.ndarray) and error_signals.ndim == 0:
+            error_signals = [error_signals.item()]
+        elif isinstance(error_signals, np.ndarray) and error_signals.ndim == 1:
+            error_signals = list(error_signals)
+    
+        # Per ogni neurone di output
         for i, neuron in enumerate(self.layers[-1]):
-            neuron.compute_delta(error_signals[i])
-        
+            # Se c'è solo un neurone di output e error_signals ha lunghezza 1
+            if i < len(error_signals):
+                neuron.compute_delta(error_signals[i])
+            else:
+                # Questo non dovrebbe succedere se le dimensioni sono corrette
+                print(f"WARNING: neurone output {i} ma error_signals ha lunghezza {len(error_signals)}")
+                neuron.compute_delta(0.0)  # Default a 0
+    
+        # Calcola delta per layer nascosti
         for l in range(len(self.layers) - 2, 0, -1):
             for neuron in self.layers[l]:
                 neuron.compute_delta(None)
-
+    
+        # Aggiorna o accumula gradienti
         for l in range(len(self.layers) - 1, 0, -1):
             for n in self.layers[l]:
                 if accumulate:
