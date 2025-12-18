@@ -134,7 +134,7 @@ if __name__ == "__main__":
         print("="*60)
         
         if results['test_accuracy'] >= 0.99:
-            print(" OBIETTIVO RAGGIUNTO: 99% accuracy! 🎉🎉🎉")
+            print(" OBIETTIVO RAGGIUNTO: 99% accuracy!")
         elif results['test_accuracy'] >= 0.97:
             print("Ottimo risultato! Vicino al massimo teorico (95-97% per Monk 3)")
         else:
