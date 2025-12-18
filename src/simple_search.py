@@ -143,6 +143,6 @@ if __name__ == "__main__":
         print(f"\nParametri usati: {results['params']}")
         
     except Exception as e:
-        print(f"\n❌ ERRORE durante l'esecuzione: {e}")
+        print(f"\n ERRORE durante l'esecuzione: {e}")
         import traceback
         traceback.print_exc()
