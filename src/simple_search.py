@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 from neural_network import NeuralNetwork
 from data_manipulation import return_monk3
 
-def realistic_monk3_test():
-    """Test realistico per Monk 3"""
+def _monk3_test():
     print("TEST REALISTICO PER MONK 3")
     print("="*60)
     
@@ -78,13 +77,6 @@ def realistic_monk3_test():
     print(f"Validation Accuracy: {val_acc:.4%}")
     print(f"Test Accuracy:       {test_acc:.4%}")
     
-    # Statistiche dettagliate
-    print(f"\nStatistiche predizioni test:")
-    print(f"  Min prediction: {test_pred.min():.6f}")
-    print(f"  Max prediction: {test_pred.max():.6f}")
-    print(f"  Mean prediction: {test_pred.mean():.6f}")
-    print(f"  Std prediction: {test_pred.std():.6f}")
-    
     # Confusion matrix
     tp = np.sum((test_pred_class == 1) & (y_test == 1))
     fp = np.sum((test_pred_class == 1) & (y_test == 0))
@@ -95,16 +87,6 @@ def realistic_monk3_test():
     print(f"           Predicted 0  Predicted 1")
     print(f"Actual 0   {tn:10}  {fp:10}")
     print(f"Actual 1   {fn:10}  {tp:10}")
-    
-    # Precision, Recall, F1
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-    
-    print(f"\nMetriche:")
-    print(f"  Precision: {precision:.4f}")
-    print(f"  Recall:    {recall:.4f}")
-    print(f"  F1-score:  {f1:.4f}")
     
     # Grafico delle loss
     plt.figure(figsize=(12, 5))
@@ -152,17 +134,11 @@ if __name__ == "__main__":
         print("="*60)
         
         if results['test_accuracy'] >= 0.99:
-            print("🎉🎉🎉 OBIETTIVO RAGGIUNTO: 99% accuracy! 🎉🎉🎉")
+            print(" OBIETTIVO RAGGIUNTO: 99% accuracy! 🎉🎉🎉")
         elif results['test_accuracy'] >= 0.97:
-            print("✅ Ottimo risultato! Vicino al massimo teorico (95-97% per Monk 3)")
+            print("Ottimo risultato! Vicino al massimo teorico (95-97% per Monk 3)")
         else:
-            print(f"🔧 Accuracy: {results['test_accuracy']:.2%}")
-            print("   Prova queste modifiche:")
-            print("   1. Aumenta epoche a 500")
-            print("   2. Prova learning rate 0.05")
-            print("   3. Prova batch_size=16")
-            print("   4. Aumenta hidden neurons a 12")
-            print("   5. Prova algoritmo RPROP")
+            print(f"Accuracy: {results['test_accuracy']:.2%}")
         
         print(f"\nParametri usati: {results['params']}")
         
