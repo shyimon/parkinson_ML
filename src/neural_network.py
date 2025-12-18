@@ -2,7 +2,6 @@ import neuron
 import numpy as np
 import matplotlib.pyplot as plt
 import utils
-import neuron
 from joblib import Parallel, delayed
 
 
@@ -128,10 +127,13 @@ class NeuralNetwork:
                 neuron.apply_accumulated_gradients(eta=self.eta, 
                                                    batch_size=batch_size, 
                                                    l2_lambda=self.l2_lambda, 
-                                                   algorithm=self.algorithm, 
+                                                   algorithm=self.algorithm,
+                                                   momentum=self.momentum,
+                                                   mu=self.mu,
                                                    eta_plus=self.eta_plus, 
                                                    eta_minus=self.eta_minus,
-                                                   momentum=self.momentum)
+                                                   decay=self.decay
+                                                  )
 
     # backprop implementation
     def backward(self, error_signals, accumulate=False):
@@ -171,17 +173,20 @@ class NeuralNetwork:
     # the test set is passed purely to assess the test error at each step but is not used for
     # learning, to keep the test set "unseen".
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
-    def fit(self, X_train, y_train, X_val, y_val, epochs=1000, batch_size=1, patience=20, verbose=True):
+    def fit(self, X_train, y_train, X_val, y_val, epochs=1000, batch_size=1, patience=30, min_delta=0.001, verbose=True):
 
-        patience_level = patience
-
-         # reset history
         self.loss_history = {"training": [], "validation": []}
+        self.best_val_loss = np.inf  # Reset del miglior validation loss
+        self.lr_wait = 0  # Reset del contatore per LR scheduling
+    
+        # Variabili locali per early stopping
+        patience_counter = patience
+        local_best_val_loss = np.inf  # Variabile locale per early stopping
 
         for epoch in range(epochs):
             total_loss = 0.0
 
-            # Unified batch loop
+            # Mini-batch training
             for start_idx in range(0, len(X_train), batch_size):
 
                 end_idx = min(start_idx + batch_size, len(X_train))
@@ -212,27 +217,42 @@ class NeuralNetwork:
             val_loss = np.sum(self.compute_loss(y_val, y_pred_val, loss_type=self.loss_type))
             avg_val_loss = val_loss / len(y_val)
             self.loss_history["validation"].append(avg_val_loss)
-            self._update_lr_on_plateau(avg_val_loss)
 
-            #early stopping su validation
-            if epoch >= patience:
-                if self.loss_history["validation"][epoch] >= self.loss_history["validation"][epoch - 1]:
-                    patience_level -= 1
-                else:
-                    patience_level = patience
-                if patience_level == 0:
-                    for layer in self.layers: # restore best parameters
-                        for neuron in layer:
-                            neuron.restore_best_weights()
-                    if verbose:
-                        print(f"Early stopping. Last epoch {epoch}, Train Loss: {train_loss_epoch:.4f}, "
-                          f"Val Loss: {avg_val_loss:.4f}, Batch size: {batch_size}")
-                    break      
+            # Salva i migliori pesi
+            if avg_val_loss < local_best_val_loss - min_delta:
+                local_best_val_loss = avg_val_loss
+                patience_counter = patience  # resetta contatore pazienza
 
-            if epoch % 25 == 0 and verbose:
-                print(f"Epoch {epoch}, Loss: {avg_val_loss:.4f}, Batch size: {batch_size}\nValidation Loss: {avg_val_loss:.4f}\n")
+                # Salva i pesi migliori
+                for layer in self.layers[1:]:
+                    for neuron in layer:
+                        neuron.set_best_weights()
+                if verbose and epoch % 10 == 0:
+                    print(f"Epoch {epoch}: Nuovo miglioramento! Loss: {avg_val_loss:.6f}")
+            else:
+                patience_counter -= 1
+
+            # Early stopping
+            if patience_counter <= 0:
+                #ripristina i migliori pesi
+                for layer in self.layers[1:]:
+                    for neuron in layer:
+                        neuron.restore_best_weights()
+                if verbose:
+                    print(f"Early stopping at epoch {epoch}")
+                    print(f"  Best validation loss: {local_best_val_loss:.6f}")
+                    print(f"  Final validation loss: {avg_val_loss:.6f}")
+                return self.loss_history
+                
+
+        # Learning rate scheduling (usa l'attributo della classe)
+        self._update_lr_on_plateau(avg_val_loss)
+        # Soglia minima di miglioramento
+        if epoch % 25 == 0 and verbose:
+            print(f"Epoch {epoch}, Train Loss: {train_loss_epoch:.4f}, Val Loss: {avg_val_loss:.4f}, LR: {self.eta:.6f}")
+    
         return self.loss_history
-
+    
     def _update_lr_on_plateau(self, val_loss):
         """Aggiorna il learning rate se la loss di validation non migliora"""
         # Soglia minima di miglioramento
@@ -258,9 +278,12 @@ class NeuralNetwork:
         """
         Calcola la loss in base al tipo specificato.
         """
+        # Clipping per stabilità numerica
+        y_pred = np.clip(y_pred, 1e-7, 1 - 1e-7)
         error = y_pred - y_true
-
-        if loss_type == "half_mse":
+        if loss_type == "binary_crossentropy":
+            return - (y_true * np.log(y_pred) + (1 - y_true) * np.log(1 - y_pred))
+        elif loss_type == "half_mse":
             return 0.5 * error ** 2
         elif loss_type == "mae":
             return np.abs(error)
@@ -281,9 +304,15 @@ class NeuralNetwork:
         """
         Calcola il segnale di errore da passare al neurone di output in base al tipo di loss specificato
         """
+        # Clipping per stabilità numerica
+        y_pred = np.clip(y_pred, 1e-7, 1 - 1e-7)
         error = y_pred - y_true
         
-        if loss_type == "half_mse":
+        if loss_type == "binary_crossentropy":
+        # Per sigmoid/tanh + binary cross-entropy
+            return (y_pred - y_true)
+        
+        elif loss_type == "half_mse":
             return error
         
         elif loss_type == "mae":

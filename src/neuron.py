@@ -59,13 +59,16 @@ class Neuron:
     # Activation function's derivative gets called dynamically (string based) based on how the neuron was initialized
     def activation_deriv(self, input):
         if self.activation_function_type == "sigmoid":
-            deriv = self.output * (1.0 - self.output)
-            deriv = self.output * (1 - self.output)
+            sig = self.output 
+            deriv = sig * (1 - sig)
         elif self.activation_function_type == "tanh":
-             deriv = 1.0 - self.output * self.output
+             tanh = self.output
+             deriv = 1.0 - tanh**2
         else:
             raise ValueError(f"The specified activation function {self.activation_function_type} is not implemented as of yet.")
-        return np.maximum(deriv, 1e-8)
+       
+        # Clipping per stabilità
+        return np.clip(deriv, 1e-8, 1.0)
 
     # a single example is fed to the neuron. The sum and then whatever activation function was selected are called
     def feed_neuron(self, inputs):
@@ -126,34 +129,15 @@ class Neuron:
 
             if momentum > 0.0:
                 # Momentum
-                self.vel_w = momentum * self.vel_w + grad_w
-                self.vel_b = momentum * self.vel_b + grad_b
-                self.weights -= eta * (self.vel_w - l2_lambda * self.weights)
-                self.bias -= eta * self.vel_b
+                self.vel_w = momentum * self.vel_w - eta * grad_w
+                self.vel_b = momentum * self.vel_b - eta * grad_b
+                self.weights += self.vel_w 
+                self.bias += self.vel_b
             else:
-                # SGD semplice
-                self.weights -= eta * (grad_w - l2_lambda * self.weights)
+                # Senza momentum
+                self.weights -= eta * grad_w
                 self.bias -= eta * grad_b
-        
-                # Reset accumulatori
-                self.weight_grad_accum.fill(0.0)
-                self.bias_grad_accum = 0.0
-            '''
-            grad_w = self.weight_grad_accum / batch_size
-            grad_b = self.bias_grad_accum / batch_size  
 
-            if momentum >= 0.0:
-                self.vel_w = momentum * self.vel_w + grad_w
-                self.vel_b = momentum * self.vel_b + grad_b
-                self.weights -= eta * self.vel_w
-                self.bias -= eta * self.vel_b  
-            else:
-             self.weights -= eta * grad_w
-            self.bias -= eta * grad_b  
-            # Reset accumulatori batch
-            self.weight_grad_accum.fill(0.0)
-            self.bias_grad_accum = 0.0 
-            '''
         elif algorithm == 'rprop':
             eta_plus = kwargs.get('eta_plus', 1.2)
             eta_minus = kwargs.get('eta_minus', 0.5)
@@ -170,6 +154,26 @@ class Neuron:
             
             self.update_weights_quickprop(batch_size, eta, mu, decay)
             self.reset_grad_accum() # Resetta gli accumuli dell'aggiornamento dei pesi per il prossimo batch
+        
+        # Reset accumulatori
+        self.weight_grad_accum.fill(0.0)
+        self.bias_grad_accum = 0.0
+        '''
+            grad_w = self.weight_grad_accum / batch_size
+            grad_b = self.bias_grad_accum / batch_size  
+
+            if momentum >= 0.0:
+                self.vel_w = momentum * self.vel_w + grad_w
+                self.vel_b = momentum * self.vel_b + grad_b
+                self.weights -= eta * self.vel_w
+                self.bias -= eta * self.vel_b  
+            else:
+             self.weights -= eta * grad_w
+            self.bias -= eta * grad_b  
+            # Reset accumulatori batch
+            self.weight_grad_accum.fill(0.0)
+            self.bias_grad_accum = 0.0 
+            '''
 
     def update_weights(self, eta, l2_lambda=0.00):
         # DEBUG: stampa per vedere cosa c'è

@@ -1,115 +1,63 @@
-import argparse
 import numpy as np
 import data_manipulation as data
-import new_grid_search 
+import neural_network as nn
+from grid_search import GridSearch
 
 def main():
-    parser = argparse.ArgumentParser(description='Grid Search per Neural Network')
-    parser.add_argument('--dataset', type=str, default='monk3',
-                       choices=['monk1', 'monk2', 'monk3', 'cup'],
-                       help='Dataset da usare')
-    parser.add_argument('--no_one_hot', action='store_true',
-                       help='Disabilita one-hot encoding (solo per Monk)')
-    parser.add_argument('--no_shuffle', action='store_true',
-                       help='Disabilita shuffle dei dati')
-    parser.add_argument('--train_size', type=int, default=250,
-                       help='Training size per CUP')
-    parser.add_argument('--val_size', type=int, default=125,
-                       help='Validation size per CUP')
-    parser.add_argument('--test_size', type=int, default=125,
-                       help='Test size per CUP')
-    parser.add_argument('--quick_test', action='store_true',
-                       help='Esegui un test rapido con meno trials')
-    
-    args = parser.parse_args()
-    
-    print("=" * 70)
-    print("GRID SEARCH AVANZATO PER NEURAL NETWORK")
-    print("=" * 70)
-    
-    # Esegui il grid search
-    try:
-        if args.quick_test:
-            # Per test rapido, modifica il file new_grid_search.py per usare meno trials
-            print("Modalità test rapido attivata...")
-            # Qui potresti importare una versione modificata o passare parametri
-            # Per semplicità, eseguiamo comunque il grid search normale
-            pass
-        
-        results = new_grid_search.run_grid_search(
-            dataset_name=args.dataset,
-            one_hot=not args.no_one_hot,
-            dataset_shuffle=not args.no_shuffle,
-            cup_train_size=args.train_size,
-            cup_val_size=args.val_size,
-            cup_test_size=args.test_size
-        )
-        
-        # Stampa un riepilogo
-        print("\n" + "=" * 70)
-        print("RIEPILOGO RISULTATI")
-        print("=" * 70)
-        
-        best_params = results['best_params']
-        network_structure = results['network_structure']
-        
-        print(f"\nSTRUTTURA RETE OTTIMALE:")
-        print(f"  {network_structure}")
-        print(f"  Input: {network_structure[0]} neuroni")
-        
-        hidden_layers = network_structure[1:-1]
-        for i, neurons in enumerate(hidden_layers):
-            print(f"  Hidden layer {i+1}: {neurons} neuroni")
-        
-        print(f"  Output: {network_structure[-1]} neurone/i")
-        
-        print(f"\nIPERPARAMETRI OTTIMALI:")
-        for key in ['eta', 'batch_size', 'epochs', 'algorithm', 
-                   'activation_type', 'loss_type', 'l2_lambda', 'momentum']:
-            if key in best_params:
-                print(f"  {key}: {best_params[key]}")
-        
-        if 'hidden_structure' in best_params:
-            print(f"  hidden_structure: {best_params['hidden_structure']}")
-        
-        print(f"\nPERFORMANCE FINALE (300 trials):")
-        if args.dataset == 'cup':
-            print(f"  Training MEE: {results['train_mean']:.4f} ± {results['train_std']:.4f}")
-            print(f"  Validation MEE: {results['val_mean']:.4f} ± {results['val_std']:.4f}")
-            print(f"  Test MEE: {results['test_mean']:.4f} ± {results['test_std']:.4f}")
-        else:
-            print(f"  Training Accuracy: {results['train_mean']:.2f}% ± {results['train_std']:.2f}%")
-            print(f"  Validation Accuracy: {results['val_mean']:.2f}% ± {results['val_std']:.2f}%")
-            print(f"  Test Accuracy: {results['test_mean']:.2f}% ± {results['test_std']:.2f}%")
-        
-    except Exception as e:
-        print(f"\nErrore durante il grid search: {e}")
-        import traceback
-        traceback.print_exc()
+    print("\n[1] Caricamento dataset MONK3...")
+    X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
 
+    print(f"  Training set: {X_train.shape}")
+    print(f"  Test set: {X_test.shape}")
+    
+    print("\n[2] Esecuzione Grid Search...")
+    print("-"*70)
+
+    # Normalization
+    # X_train_normalized = data.normalize(X_train, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
+    # X_test_normalized = data.normalize(X_test, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
+    X_train_normalized = np.concatenate([X_train, X_val])
+    y_train_normalized = np.concatenate([y_train, y_val])
+
+    X_test_normalized = X_test
+
+    gs = GridSearch(cv_folds=5, verbose=True, results_dir='grid_search_results')
+   
+    best_params, cv_val_acc, cv_val_std, cv_train_acc, cv_train_std = gs._dichotomic_search(
+        X_train_normalized, y_train_normalized,
+        max_iteration=4,
+        n_points=5
+    )
+
+    num_trials = 500
+    print("="*70)
+    print(f"GRID SEARCH + {num_trials} TRIAL SU MONK1")
+    print("="*70)
+
+    print(f"\n[3] {num_trials} Trial con parametri ottimali")
+    print("-"*70)
+    
+    trials_results = gs.run_trials(
+        X_train_normalized, y_train_normalized, X_test_normalized, y_test,
+        n_trials=200,
+        save_results=True,
+        results_filename='trials_results.json'
+    )
+    
+    print("\n" + "="*70)
+    print("RISULTATO FINALE MONK 1")
+    print("="*70)
+    print(f"Parametri ottimali: lr={best_params['learning_rate']:.4f}, hidden={best_params['hidden_neurons']}, epochs={best_params['epochs']}, Training Accuracy:   {cv_train_acc:.2f}% ± {cv_train_std:.2f}%, Validation Accuracy: {cv_val_acc:.2f}% ± {cv_val_std:.2f}")
+    
+      
+    if trials_results:
+        print(f"\n{num_trials} Trial indipendenti:")
+        print(f"  Training Accuracy: {trials_results['training_accuracy']['mean']:.2f}% ± {trials_results['training_accuracy']['std']:.2f}%")
+        print(f"  Test Accuracy:     {trials_results['test_accuracy']['mean']:.2f}% ± {trials_results['test_accuracy']['std']:.2f}%")
+        print(f"  Gap medio (Train-Test): {trials_results['accuracy_gap']['mean']:.2f}% ± {trials_results['accuracy_gap']['std']:.2f}%")
+        print(f"  Tempo totale: {trials_results['time']['total']:.1f} secondi")
+
+    # net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0001, algorithm="sgd", activation_type="sigmoid", eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.0001, weight_initializer="def", momentum=0.9)
+    # net.fit(X_train_normalized, y_train, X_val_normalized, y_val, epochs=2000, batch_size=4, patience=50)
 if __name__ == "__main__":
     main()
-
-"""
-COME ESEGUIRE
-# Monk3 (default)
-python main.py
-
-# Monk1
-python main.py --dataset monk1
-
-# Monk2
-python main.py --dataset monk2
-
-# CUP
-python main.py --dataset cup
-
-# Disabilitare one-hot encoding
-python main.py --dataset monk3 --no_one_hot
-
-# Disabilitare shuffle
-python main.py --dataset monk3 --no_shuffle
-
-# CUP con dimensioni personalizzate
-python main.py --dataset cup --train_size 300 --val_size 100 --test_size 100
-"""
