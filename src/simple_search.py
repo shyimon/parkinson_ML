@@ -127,7 +127,7 @@ def _monk3_test():
 
 if __name__ == "__main__":
     try:
-        results = realistic_monk3_test()
+        results = _monk3_test()
         
         print(f"\n{'='*60}")
         print("RIEPILOGO FINALE")
