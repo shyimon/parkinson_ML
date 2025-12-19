@@ -99,14 +99,15 @@ class DichotomicCVSearch:
             # Crea e addestra rete passando i valori della configurazione come argomenti
             net = NeuralNetwork(**config)
             
-            # OTTIMIZZAZIONE + MIGLIORAMENTO: Early stopping aggressivo per contrastare overfitting
+            # OTTIMIZZAZIONE + MIGLIORAMENTO: Early stopping meno aggressivo
+            # Permetti al modello di imparare per più tempo
             history = net.fit(
                 X_train, y_train,
                 X_val, y_val,
                 epochs=200,
                 batch_size=min(16, len(X_train)),
-                patience=6,  # Ridotto a 6: stop prima se test loss aumenta
-                min_delta=0.0005,  # Aumentato a 0.0005: richiede miglioramento vero
+                patience=15,  # Aumentato: permetti più tentivi senza miglioramento
+                min_delta=0.001,  # Ridotto: richiedi miglioramento >0.001
                 verbose=False
             )
             
@@ -132,8 +133,8 @@ class DichotomicCVSearch:
         # Creo la configurazione completa della rete
         config = self._create_network_config({}, specific_params)
         
-        # Eseguo cross-validation con k=2 per velocità nella ricerca
-        score = self.cross_validate(config, X, y, k=2)  
+        # Eseguo cross-validation con k=3 per accuratezza migliore
+        score = self.cross_validate(config, X, y, k=3)  
         
         if use_cache:
             self.cache[params_tuple] = score
@@ -319,17 +320,17 @@ def run_complete_search():
     print(f"  Test set: {X_test.shape[0]}")
     
     # Definizione degli intervalli di ricerca
-    # MIGLIORAMENTI per ridurre overfitting:
-    # - eta più basso (0.001-0.05) per evitare oscillazioni nel test loss
-    # - l2_lambda più alto (0.001-0.1) per maggiore regolarizzazione
-    # - hidden_neurons più alti (8-20) per miglior capacità rappresentativa
+    # AGGRESSIVO per imparare velocemente:
+    # - eta: 0.02-0.1 (abbastanza alto per convergenza veloce)
+    # - l2_lambda: 0.0 (nessuna regolarizzazione iniziale per imparare)
+    # - hidden_neurons: 12-32 (capacità maggiore)
     param_ranges = {
-        'eta': (0.001, 0.05),          # Ridotto da 0.1: η=0.1 causa oscillazioni
-        'l2_lambda': (0.001, 0.1),    # Aumentato da 0.01: λ=0.01 è insufficiente
-        'hidden_neurons': (8, 20),    # Aumentato da 16: [4,4] è troppo piccolo
-        'num_layers': (2, 4),        
-        'momentum': (0.7, 0.95),      # Aumentato il minimo: momentum > 0.7 aiuta convergenza
-        'epochs': (200, 500)          # Ridotto: 600 è troppo con early stopping
+        'eta': (0.02, 0.1),            # AUMENTATO: 0.02-0.1 per velocità
+        'l2_lambda': (0.0, 0.005),     # RIDOTTO: min 0.0, max 0.005 (quasi niente)
+        'hidden_neurons': (12, 32),    # AUMENTATO: [12-32] neuroni per layer
+        'num_layers': (2, 3),          # 2-3 layer sono ottimali
+        'momentum': (0.8, 0.99),       # Momentum alto per convergenza
+        'epochs': (200, 600)           # Max 600 epochs, training avrà tempo
     }
     
     # Crea il searcher per la ricerca dicotomica
@@ -341,7 +342,7 @@ def run_complete_search():
     print("="*60)
     
     start_time = time.time()
-    best_params, best_score = searcher.dichotomic_search(X_cv, y_cv, max_iterations=3)
+    best_params, best_score = searcher.dichotomic_search(X_cv, y_cv, max_iterations=5)
     cv_time = time.time() - start_time
     
     # Ricerca raffinata
@@ -350,7 +351,7 @@ def run_complete_search():
     print("="*60)
     
     refined_params, refined_score = searcher.refined_search(
-        best_params, X_cv, y_cv, radius=0.2, steps=5
+        best_params, X_cv, y_cv, radius=0.2, steps=3
     )
     
     # VALUTAZIONE FINALE SUL TEST SET
@@ -373,10 +374,10 @@ def run_complete_search():
     history = final_net.fit(
         X_cv, y_cv,
         X_test, y_test,  # Uso test set come validation per early stopping
-        epochs=300,
+        epochs=400,
         batch_size=16,
-        patience=12,  # Ridotto da 20: ferma prima se test loss peggiora
-        min_delta=0.0005,  # Aumentato: richiede miglioramento significativo
+        patience=20,  # Aumentato: permetti più tentativi
+        min_delta=0.001,  # Ridotto: richiedi >0.001 miglioramento
         verbose=True
     )
     
