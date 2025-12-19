@@ -45,10 +45,10 @@ class DichotomicCVSearch:
     def _create_network_config(self, base_params, specific_params):
         # mi serve per costruire "il pacchetto di informazioni" per creare la rete completa
         config = {
-    # network_structure è una lista tipo: [17, 8, 8, 1] - 17 input, 2 hidden da 8, 1 output
+    # network_structure è una lista tipo: [17, 8, 8, 2] - 17 input, 2 hidden da 8, 2 output
     # ('hidden neurons', 8) significa prendi hidden neurons se esiste altrimenti usa 8
             'network_structure': [17] + [specific_params.get('hidden_neurons', 8)] * 
-                                 specific_params.get('num_layers', 2) + [1],
+                                 specific_params.get('num_layers', 2) + [2],
             'eta': specific_params.get('eta', 0.05),
             'l2_lambda': specific_params.get('l2_lambda', 0.001),
             'momentum': specific_params.get('momentum', 0.9),
@@ -97,7 +97,7 @@ class DichotomicCVSearch:
             history = net.fit(
                 X_train, y_train,
                 X_val, y_val,
-                epochs=200,
+                epochs=600,
                 batch_size=min(16, len(X_train)),
                 patience=15,
                 min_delta=0.0001,
