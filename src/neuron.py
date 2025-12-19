@@ -135,8 +135,8 @@ class Neuron:
                 self.bias += self.vel_b
             else:
                 # Senza momentum
-                self.weights -= eta * grad_w
-                self.bias -= eta * grad_b
+                self.weights += eta * grad_w
+                self.bias += eta * grad_b
 
         elif algorithm == 'rprop':
             eta_plus = kwargs.get('eta_plus', 1.2)
@@ -296,7 +296,7 @@ class Neuron:
                     if np.sign(step) == np.sign(current_slope): # Se il passo calcolato ha la stessa direzione del gradiente (ossia si va nella direzione opposta alla discesa del gradiente)
                         step = - eta * current_slope # Si forza l'aggiornamento a seguire la discesa del gradiente
                         
-            self.weights[i] -= step # Aggiornamento effettivo del peso
+            self.weights[i] += step # Aggiornamento effettivo del peso
             self.prev_weight_grad[i] = current_slope # Memorizzazione del gradiente corrente per il prossimo confronto perchè questo valore al prossimo passo diventerà t-1
             self.prev_weight_update[i] = step # Memorizzazione dell'ultimo aggiornamento del peso
     
@@ -318,7 +318,7 @@ class Neuron:
                 if np.sign(step_b) == np.sign(current_slope_b):
                     step_b = - eta * current_slope_b
         
-        self.bias -= step_b # Aggiornamento effettivo del bias
+        self.bias += step_b # Aggiornamento effettivo del bias
         # Ricostruzione della memoria
         self.prev_bias_grad = curr_grad_b
         self.prev_bias_update = step_b 

@@ -4,12 +4,16 @@ from cascade_correlation import CascadeNetwork
 import pandas as pd
 import matplotlib.pyplot as plt
 
-cup_train_X, cup_train_y, cup_test_X, cup_test_y = data.return_CUP()
+tr_X, tr_y, val_X, val_y, te_X, te_y = data.return_CUP()
 
-cup_test_X = data.normalize(cup_test_X, -1, 1, cup_train_X.min(axis=0), cup_train_X.max(axis=0))
-cup_test_y = data.normalize(cup_test_y, -1, 1, cup_train_y.min(axis=0), cup_train_y.max(axis=0))
-cup_train_X = data.normalize(cup_train_X, -1, 1, cup_train_X.min(axis=0), cup_train_X.max(axis=0))
-cup_train_y = data.normalize(cup_train_y, -1, 1, cup_train_y.min(axis=0), cup_train_y.max(axis=0))
+cup_train_X = np.vstack((tr_X, val_X))
+cup_train_y = np.vstack((tr_y, val_y))
+
+cup_test_X = te_X
+cup_test_y = te_y
+
+cup_train_X, _, cup_test_X = data.normalize_dataset(cup_train_X, cup_train_X, cup_test_X, min_val=-1, max_val=1)
+cup_train_y, _, cup_test_y = data.normalize_dataset(cup_train_y, cup_train_y, cup_test_y, min_val=-1, max_val=1)
 
 n_inputs = cup_train_X.shape[1]
 n_outputs = cup_train_y.shape[1]
@@ -19,11 +23,11 @@ eta = 0.7
 print(f"Creating Cascade Network: {n_inputs} Inputs -> {n_outputs} Outputs")
 print("Algorithm: Quickprop")
 
-net = CascadeNetwork(n_inputs, n_outputs, learning_rate=eta, algorithm='quickprop')
+net = CascadeNetwork(n_inputs, n_outputs, learning_rate=0.05, algorithm='quickprop')
 
 print("Start training Phase 0 (Linear Training)...")
 
-final_error = net.train_phase_0(cup_train_X, cup_train_y, epochs=1000, tolerance=0.001, patience=50)
+final_error = net.train(cup_train_X, cup_train_y, max_epochs=2000, tolerance=0.001, patience=30, max_hidden_units=10)
 
 print(f"Phase 0 ended. Residual Error: {final_error:.5f}")
 
@@ -43,4 +47,5 @@ print(f"Mean Test Error (MSE): {avg_test_error:.5f}")
 
 # net.save_plots("img/cup_plot.png")
 # net.draw_network("img/cup_network")
+
 
