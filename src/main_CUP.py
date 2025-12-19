@@ -10,7 +10,7 @@ cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y = data.re
 train_min = cup_train_X.min(axis=0) 
 train_max = cup_train_X.max(axis=0)
 
-activation_type = "tanh"
+activation_type = "sigmoid"
 
 if activation_type=="tanh":
     target_min = -1
