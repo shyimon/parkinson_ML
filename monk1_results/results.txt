@@ -1,0 +1,25 @@
+X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk1(one_hot=False, dataset_shuffle=True)
+network_structure = [X_train_normalized.shape[1]]
+network_structure.append(3)  # Hidden layer with 4 neurons
+network_structure.append(1)  # Output layer with 1 neuron
+eta = 0.4        # Learning rate
+
+
+# Network is created and trained
+print("Creating neural network with huber loss...")
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.00000, algorithm="sgd", activation_type="sigmoid", eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.95, weight_initialzer="def", momentum=0.9)
+print("Start training with rprop...")
+best_val = net.fit(X_train_normalized, y_train, X_val_normalized, y_val, epochs=1000, batch_size=8, patience=50)
+
+
+Epoch 999, Loss: 0.000243
+Validation Loss: 0.001976
+
+Best validation: 0.001976
+Calculating accuracy...
+
+Final Training Accuracy: 100.00%
+Test Accuracy: 100.00%
+Details:
+Correctly predicted training patterns: 62/62
+Correctly predicted test patterns: 432/432

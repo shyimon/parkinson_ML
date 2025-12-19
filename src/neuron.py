@@ -3,7 +3,7 @@ import math
 
 class Neuron:
     # Constructor
-    def __init__(self, num_inputs, index_in_layer, is_output_neuron=False, activation_function_type="tanh", weight_initializer='xavier', bias_initializer='uniform'):
+    def __init__(self, num_inputs, index_in_layer, is_output_neuron=False, activation_function_type="tanh", weight_initializer='xavier', weight_floor=-0.01, weight_ceiling=0.01):
         self.index_in_layer = index_in_layer
         self.is_output_neuron = is_output_neuron
         self.activation_function_type = activation_function_type
@@ -16,6 +16,8 @@ class Neuron:
         self.vel_b = 0.0
         self.best_weights = None
         self.best_bias = None
+        self.weight_floor = weight_floor
+        self.weight_ceiling = weight_ceiling
 
         limit = 1 / math.sqrt(num_inputs) if num_inputs > 0 else 0.2
 
@@ -23,8 +25,8 @@ class Neuron:
             self.weights = np.random.uniform(-limit, limit, size=num_inputs)
             self.bias = np.random.uniform(-limit, limit)
         else:
-            self.weights = np.random.uniform(-0.2, 0.2, size=num_inputs)
-            self.bias = np.random.uniform(-0.2, 0.2)
+            self.weights = np.random.uniform(self.weight_floor, self.weight_ceiling, size=num_inputs)
+            self.bias = np.random.uniform(self.weight_floor, self.weight_ceiling)
 
         #per mini-batch gradient accumulation
         self.prev_weight_grad = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)

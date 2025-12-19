@@ -3,7 +3,7 @@ import numpy as np
 
 # Monk datasets are returned separately and splitted into training, test, parameters and targets
 # ho messo dataset_shuffle=false
-def return_monk1(dataset_shuffle=False, one_hot=False):
+def return_monk1(dataset_shuffle=False, one_hot=False, val_split=0.3):
     monk1_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
     monk1_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
@@ -46,7 +46,7 @@ def return_monk1(dataset_shuffle=False, one_hot=False):
     return monk1_train_X, monk1_train_y, monk1_val_X, monk1_val_y, monk1_test_X, monk1_test_y
 
 
-def return_monk2(dataset_shuffle=True, one_hot=False):
+def return_monk2(dataset_shuffle=True, one_hot=False, val_split=0.3):
     monk2_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.train'
     monk2_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-2.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
@@ -80,7 +80,7 @@ def return_monk2(dataset_shuffle=True, one_hot=False):
     monk2_test_y = monk2_test['class'].to_numpy().reshape(-1, 1)
 
     idx = len(monk2_train_X)
-    split = int(0.5 * idx)
+    split = int((1 - val_split) * idx)
     monk2_val_X = monk2_train_X[split:]
     monk2_train_X = monk2_train_X[:split]
     monk2_val_y = monk2_train_y[split:]
@@ -131,7 +131,7 @@ def return_monk3(dataset_shuffle=True, one_hot=False, val_split=0.3):
 
 def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_size=125):
     cols = ["id"] + [f"in_{i}" for i in range(1, 13)] + [f"t_{i}" for i in range(1, 5)]
-    cup = pd.read_csv("../data/ML-CUP25-TR.csv", comment="#", names=cols) # Quando runnavo da main_CUP_cascade.py non trovava il file 
+    cup = pd.read_csv("data/ML-CUP25-TR.csv", comment="#", names=cols)
     pd.set_option("display.precision", 3)
 
     cup_train = cup[0:train_size]
@@ -143,32 +143,18 @@ def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_s
         cup_val = cup_val.sample(frac=1).reset_index(drop=True)
         cup_test = cup_test.sample(frac=1).reset_index(drop=True)
 
-    cup_train_X = cup_train.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
-    cup_train_y = cup_train[['t_1', 't_2', 't_3', 't_4']].to_numpy()
-    cup_val_X = cup_val.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
-    cup_val_y = cup_val[['t_1', 't_2', 't_3', 't_4']].to_numpy()
-    cup_test_X = cup_test.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
-    cup_test_y = cup_test[['t_1', 't_2', 't_3', 't_4']].to_numpy()
+    cup_train_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
+    cup_train_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
+    cup_val_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
+    cup_val_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
+    cup_test_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
+    cup_test_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
     
     return cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y
+    
 
-def normalize_dataset(X_train, X_val, X_test, min_val=0, max_val=1):
-    """Normalizza tutti i dataset usando min/max del training set"""
-    # Converte in float se necessario (per one-hot encoding booleano)
-    if X_train.dtype == bool or np.issubdtype(X_train.dtype, np.bool_):
-        X_train = X_train.astype(float)
-        X_val = X_val.astype(float)
-        X_test = X_test.astype(float)
-    
-    x_min = X_train.min(axis=0)
-    x_max = X_train.max(axis=0)
-    
-    # Evita divisione per zero
+# Linear normalization method between a max and min value passed as parameters 
+def normalize(X, min, max, x_min, x_max):
     diff = x_max - x_min
-    diff[diff == 0] = 1
-    
-    X_train_norm = (X_train - x_min) / diff * (max_val - min_val) + min_val
-    X_val_norm = (X_val - x_min) / diff * (max_val - min_val) + min_val
-    X_test_norm = (X_test - x_min) / diff * (max_val - min_val) + min_val
-    
-    return X_train_norm, X_val_norm, X_test_norm
+    diff[diff == 0] = 1e-9
+    return (X - x_min) / diff * (max - min) + min
