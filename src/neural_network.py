@@ -29,13 +29,21 @@ class NeuralNetwork:
 
         self.debug = kwargs.get("debug", False)
 
-        # Crea il primo hidden layer
+        # Creo il primo hidden layer
         if len(network_structure) > 2:  # Se ci sono hidden layers
+            # ciclo che scorre sui layer nascosti
             for i in range(1, len(network_structure) - 1):
+                # crea il layer i-esimo
                 layer_size = network_structure[i]
+# quanti neuroni c’erano nello strato precedente (cioè quanti input arrivano a ogni neurone 
+# di questo layer)
                 prev_layer_size = network_structure[i-1]
-            
+# per i=1: layer_size=8, prev_layer_size=17 alloraogni neurone nascosto riceve 17 input
+# per i=2: layer_size=8, prev_layer_size=8 allora ogni neurone del secondo hidden riceve 8 input
+
+                #creo una lista vuota dove mettere i neuroni del layer i-esimo
                 layer = []
+                # ciclo che scorre sui neuroni del layer i-esimo
                 for j in range(layer_size):
                     n = neuron.Neuron(
                         num_inputs=prev_layer_size,
@@ -44,14 +52,21 @@ class NeuralNetwork:
                         is_output_neuron=False,  # Hidden neurons
                         weight_initializer=self.weight_initializer
                     )
-                    layer.append(n)
-                self.layers.append(layer)
+                    #aggiunge il neurone j-esimo al layer i-esimo
+                    layer.append(n) 
+                    # aggiunge il layer i-esimo alla lista dei layer della rete
+                self.layers.append(layer) 
     
-        # Crea l'output layer
-        output_layer_size = network_structure[-1]
+        # Creo l'output layer
+        output_layer_size = network_structure[-1] #ultimo elemento della lista
+        # dimensione del layer precedente
+        # l'if serve nel caso in cui non ci siano hidden layer
         prev_layer_size = network_structure[-2] if len(network_structure) > 1 else network_structure[0]
-    
+
+        #lista vuota che conterrà i neuroni dell'output layer
         output_layer = []
+
+        # ciclo che scorre sui neuroni dell'output layer
         for j in range(output_layer_size):
             n = neuron.Neuron(
                 num_inputs=prev_layer_size,
@@ -61,36 +76,42 @@ class NeuralNetwork:
                 weight_initializer=self.weight_initializer
             )
             output_layer.append(n)
+        # Aggiungo l’output layer alla lista dei layer della rete.
         self.layers.append(output_layer)
     
-        # Collega i neuroni (solo se ci sono almeno 2 layer con neuroni)
+        # Collego i neuroni (solo se ci sono almeno 2 layer con neuroni)
         if len(self.layers) > 2:
             for l in range(1, len(self.layers) - 1):
                 for n in self.layers[l]:
                     n.attach_to_output(self.layers[l + 1])
+    # se self.layers ha solo 2 layer (input e output) allora collego direttamente input-output
+    # altrimenti collego hidden-hidden e infine hidden-output
 
    
     def forward(self, x):
-        """
-        Propagazione in avanti per un singolo esempio.
-        x: array 1D o 2D
-        """
-        # se è un batch, usa predict
+       # Propagazione in avanti per un singolo esempio.
+
+        # Se x è un batch (2D), usa predict
+        # se x è 1D continua con forward
         if len(x.shape) > 1:
             return self.predict(x)
         
-        # Assicurati che x sia un array 1D
+        # forzo x a diventare un array 1D
         x = np.array(x, dtype=float).flatten()
         
-        # l'input va direttamente al primo layer con neuroni (layer 1)
+        # current values: valori che passano al layer successivo
         current_values = x
         
-        # Propaga attraverso tutti i layer con neuroni (partendo da 1)
+        # Propaga attraverso tutti i layer con neuroni (partendo da 1, in quanto 0 è input)
         for layer_idx in range(1, len(self.layers)):
+
+            # output di questo layer
             layer_output = []
 
-            for neuron in self.layers[layer_idx]:
+            for neuron in self.layers[layer_idx]: #per ogni neurone del layer corrente
+                # feed_neuron ritorna l'output del neurone
                 output = neuron.feed_neuron(current_values)
+                #poi salvo quel valore nell'output del layer
                 layer_output.append(output)
             
             # l'output di questo layer diventa l'input per il prossimo
@@ -98,7 +119,8 @@ class NeuralNetwork:
 
         return current_values
     
-    # streamlines and encapsulates the forwarding of multiple examples
+    # predict fa passare l'input attraverso tutta la rete e ritorna l'output e lo fa
+    # per tutti gli input del batch, uno alla volta e restituisce tutte le predizioni insieme
     def predict(self, X):
         #Predizione per un batch di esempi.
         # X: array 2D (n_esempi, n_feature)
@@ -106,13 +128,19 @@ class NeuralNetwork:
         # Se X è un singolo esempio (1D), convertilo in 2D
         if len(X.shape) == 1:
             X = X.reshape(1, -1)
-    
+
+        # salvo le predizioni per ogni esempio
         predictions = []
+        # ciclo su ogni esempio
         for i in range(X.shape[0]):
+#chiamo forward per ogni esempio che fa passare l'input attraverso tutti i layer 
+# e produce l'output
             pred = self.forward(X[i])
+            # salvo la predizione
             predictions.append(pred)
-    
+        #infine ritorno tutte le predizioni come array 2D
         return np.vstack(predictions)
+    
 
     def _reset_gradients(self):
         """Resetta tutti gli accumulatori di gradienti"""
