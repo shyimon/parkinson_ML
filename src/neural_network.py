@@ -24,15 +24,16 @@ class NeuralNetwork:
         self.layers = []
         self.momentum = kwargs.get("momentum", 0.0) # Implementazione momentum
         self.best_val_loss = np.inf
+        self.early_stop_wait = 0
         self.lr_wait = 0
         self.decay = kwargs.get("decay", 0.9)
 
         if self.activation_type=="sigmoid":
-            self.weight_floor = 0.05
+            self.weight_floor = -0.1
             self.weight_ceiling = 0.1
         elif self.activation_type=="tanh":
-            self.weight_floor = -0.05
-            self.weight_ceiling = 0.05
+            self.weight_floor = -0.1
+            self.weight_ceiling = 0.1
 
         self.layers.append([neuron.Neuron(num_inputs=0, index_in_layer=j, 
                 activation_function_type=self.activation_type, is_output_neuron=False, weight_initializer=self.weight_initializer) 
@@ -103,14 +104,12 @@ class NeuralNetwork:
     # learning, to keep the test set "unseen".
     # Nothing is returned because the network's weights are updated in place. (we choose to have a stateful network)
     def fit(self, X_train, y_train, X_val, y_val, epochs=1000, batch_size=1, patience=20, verbose=True):
-
-        patience_level = patience
-
          # reset history
         self.loss_history = {"training": [], "validation": []}
 
         for epoch in range(epochs):
             # Unified batch loop
+            epoch_train_loss = 0.0
             for start_idx in range(0, len(X_train), batch_size):
 
                 end_idx = min(start_idx + batch_size, len(X_train))
@@ -125,6 +124,10 @@ class NeuralNetwork:
                     yi = y_train[i]
 
                     y_pred = self.forward(xi)
+
+                    sample_loss = self.compute_loss(yi, y_pred, loss_type=self.loss_type)
+                    epoch_train_loss += np.sum(sample_loss)
+
                     err = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
                     self.backward(err, accumulate=True)
 
@@ -132,8 +135,7 @@ class NeuralNetwork:
                 self._apply_accumulated_gradients(batch_size=current_batch_size)
 
             # Training loss    
-            y_pred_train = self.predict(X_train)
-            train_loss_epoch = np.sum(self.compute_loss(y_train, y_pred_train)) / len(X_train)
+            train_loss_epoch = epoch_train_loss / len(X_train)
             self.loss_history["training"].append(train_loss_epoch)
 
             #Validation loss (non tocca i pesi)
@@ -141,57 +143,48 @@ class NeuralNetwork:
             val_loss = np.sum(self.compute_loss(y_val, y_pred_val, loss_type=self.loss_type))
             avg_val_loss = val_loss / len(y_val)
             self.loss_history["validation"].append(avg_val_loss)
-            self._update_lr_on_plateau(avg_val_loss, patience)
+            self._update_lr_on_plateau(avg_val_loss, patience_lr=patience // 2)
 
             #early stopping su validation
-            if epoch >= patience:
-                if self.loss_history["validation"][epoch] >= self.loss_history["validation"][epoch - 1]:
-                    patience_level -= 1
-                else:
-                    patience_level = patience
-                if patience_level == 0:
-                    for layer in self.layers: # restore best parameters
-                        for neuron in layer:
-                            neuron.restore_best_weights()
-                    if verbose:
-                        print(f"Early stopping. Last epoch {epoch}, Train Loss: {train_loss_epoch:.4f}, "
-                          f"Val Loss: {avg_val_loss:.4f}, Batch size: {batch_size}")
-                    break       
+            min_delta = 1e-4  # tuneable, but this is reasonable for normalized CUP
 
-            for layer in self.layers: # restore best parameters
-                for neuron in layer:
-                    neuron.restore_best_weights()
+            if avg_val_loss < self.best_val_loss - min_delta:
+                self.best_val_loss = avg_val_loss
+                self.early_stop_wait = 0
+                for layer in self.layers:
+                    for neuron in layer:
+                        neuron.set_best_weights()
+            else:
+                self.early_stop_wait += 1
 
-            if epoch % 50 == 0 and verbose:
+            if self.early_stop_wait >= patience:
+                for layer in self.layers:
+                    for neuron in layer:
+                        neuron.restore_best_weights()
+                if verbose:
+                    print(
+                        f"Early stopping at epoch {epoch} | "
+                        f"Best Val Loss: {self.best_val_loss:.6f}"
+                    )
+                break     
+
+            if epoch % 25 == 0 and verbose:
                 print(f"\nEpoch {epoch}, Loss: {train_loss_epoch:.6f}\nValidation Loss: {avg_val_loss:.6f}")
             
         print(f"\nEpoch {epoch}, Loss: {self.loss_history["training"][-1]:.6f}\nValidation Loss: {self.loss_history["validation"][-1]:.6f}")
         return self.best_val_loss
         
 
-    def _update_lr_on_plateau(self, current_val_loss, total_patience):
-
-        if self.best_val_loss == np.inf:
-            self.best_val_loss = current_val_loss
-            self.lr_wait = 0
-            for layer in self.layers:
-                for neuron in layer:
-                    neuron.set_best_weights()
-            return
-        
+    def _update_lr_on_plateau(self, current_val_loss, patience_lr):
         improvement = (self.best_val_loss - current_val_loss) / max(self.best_val_loss, 1e-8)
 
         if improvement > 0.001:
-            self.best_val_loss = current_val_loss
             self.lr_wait = 0
-            for layer in self.layers: # saves best parameters to return at the end
-                for neuron in layer:
-                    neuron.set_best_weights()
         else:
             self.lr_wait += 1
 
-        if self.lr_wait >= total_patience // 2:
-            self.eta = max(self.eta * self.decay, 0.0001)
+        if self.lr_wait >= patience_lr:
+            self.eta = max(self.eta * self.decay, 1e-4)
             self.lr_wait = 0
         
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):

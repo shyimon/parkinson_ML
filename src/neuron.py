@@ -26,7 +26,7 @@ class Neuron:
             self.bias = np.random.uniform(-limit, limit)
         else:
             self.weights = np.random.uniform(self.weight_floor, self.weight_ceiling, size=num_inputs)
-            self.bias = np.random.uniform(self.weight_floor, self.weight_ceiling)
+            self.bias = np.random.uniform(0.0, 0.0)
 
         #per mini-batch gradient accumulation
         self.prev_weight_grad = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)
@@ -131,14 +131,14 @@ class Neuron:
 
             if momentum > 0.0:
                 # Momentum
-                self.vel_w = momentum * self.vel_w - eta * grad_w
-                self.vel_b = momentum * self.vel_b - eta * grad_b
-                self.weights += self.vel_w 
-                self.bias += self.vel_b
+                self.vel_w = momentum * self.vel_w + grad_w
+                self.vel_b = momentum * self.vel_b + grad_b
+                self.weights -= eta * self.vel_w 
+                self.bias -= self.vel_b
             else:
                 # Senza momentum
-                self.weights += eta * grad_w
-                self.bias += eta * grad_b
+                self.weights -= eta * grad_w
+                self.bias -= eta * grad_b
 
         elif algorithm == 'rprop':
             eta_plus = kwargs.get('eta_plus', 1.2)

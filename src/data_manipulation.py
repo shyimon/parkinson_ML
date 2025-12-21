@@ -143,12 +143,14 @@ def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_s
         cup_val = cup_val.sample(frac=1).reset_index(drop=True)
         cup_test = cup_test.sample(frac=1).reset_index(drop=True)
 
-    cup_train_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
-    cup_train_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
-    cup_val_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
-    cup_val_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
-    cup_test_X = cup.drop(columns=['id', 't_1', 't_2', 't_3', 't_4']).to_numpy()
-    cup_test_y = cup[['t_1', 't_2', 't_3', 't_4']].to_numpy()
+    cup_train_X = cup_train.drop(columns=['id','t_1','t_2','t_3','t_4']).to_numpy()
+    cup_train_y = cup_train[['t_1','t_2','t_3','t_4']].to_numpy()
+
+    cup_val_X = cup_val.drop(columns=['id','t_1','t_2','t_3','t_4']).to_numpy()
+    cup_val_y = cup_val[['t_1','t_2','t_3','t_4']].to_numpy()
+
+    cup_test_X = cup_test.drop(columns=['id','t_1','t_2','t_3','t_4']).to_numpy()
+    cup_test_y = cup_test[['t_1','t_2','t_3','t_4']].to_numpy()
     
     return cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y
     
