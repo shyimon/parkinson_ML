@@ -22,15 +22,15 @@ def _monk3_test():
     
     # Configurazione ottimizzata
     params = {
-        'network_structure': [17, 8, 2],  # 17 input (one-hot), 8 hidden, 2 output
-        'eta': 0.05,                      # Learning rate
-        'l2_lambda': 0.001,               # Regolarizzazione
+        'network_structure': [17, 7, 1], [17, 8, 1], 
+        'eta': 0.3,                      # Learning rate
+        'l2_lambda': 0.0001,              # Regolarizzazione
         'momentum': 0.9,                  # Momentum
         'algorithm': 'sgd', 'rprop'       # Algoritmo
         'activation_type': 'sigmoid',     # Attivazione
         'loss_type': 'binary_crossentropy', # Loss per classificazione binaria
         'weight_initializer': 'xavier',   # Inizializzazione
-        'decay': 0.95,                    # Decay per LR scheduling
+        'decay': 0.9,                    # Decay per LR scheduling
         'mu': 1.75,                       # Per quickprop
         'eta_plus': 1.2,                  # Per rprop
         'eta_minus': 0.5,                 # Per rprop
@@ -47,7 +47,7 @@ def _monk3_test():
         X_train, y_train,
         X_val, y_val,
         epochs=500,
-        batch_size=16,           # Mini-batch
+        batch_size=10,           # Mini-batch
         patience=25,            # Early stopping patience
         min_delta=0.0001,       # Minimo miglioramento richiesto
         verbose=True
@@ -82,11 +82,17 @@ def _monk3_test():
     fp = np.sum((test_pred_class == 1) & (y_test == 0))
     tn = np.sum((test_pred_class == 0) & (y_test == 0))
     fn = np.sum((test_pred_class == 0) & (y_test == 1))
+     # Precision: quando dice “1”, quante volte ha ragione?
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+    # di tutti gli 1 veri, quanti ne trova?
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+    # media tra precision e recall
+    f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
     
-    print(f"\nConfusion Matrix (Test Set):")
-    print(f"           Predicted 0  Predicted 1")
-    print(f"Actual 0   {tn:10}  {fp:10}")
-    print(f"Actual 1   {fn:10}  {tp:10}")
+    print(f"\nMetriche:")
+    print(f"  Precision: {precision:.4f}")
+    print(f"  Recall:    {recall:.4f}")
+    print(f"  F1-score:  {f1:.4f}")
     
     # Grafico delle loss
     plt.figure(figsize=(12, 5))

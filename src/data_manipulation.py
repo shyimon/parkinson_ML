@@ -87,7 +87,7 @@ def return_monk2(dataset_shuffle=True, one_hot=False):
     monk2_train_y = monk2_train_y[:split]
     return monk2_train_X, monk2_train_y, monk2_val_X, monk2_val_y, monk2_test_X, monk2_test_y
 
-def return_monk3(dataset_shuffle=True, one_hot=False, val_split=0.3):
+def return_monk3(dataset_shuffle=True, one_hot=True, val_split=0.3):
     monk3_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.train'
     monk3_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-3.test'
     column_names = ['class', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'id']
