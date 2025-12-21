@@ -44,6 +44,8 @@ for i in range(len(cup_test_X)):
 
 avg_test_error = test_error / len(cup_test_X)
 print(f"Mean Test Error (MSE): {avg_test_error:.5f}")
+avg_train_error = final_error / len(cup_train_X)
+print(f"Mean Training Error (MSE): {avg_train_error:.5f}")
 
 # net.save_plots("img/cup_plot.png")
 # net.draw_network("img/cup_network")

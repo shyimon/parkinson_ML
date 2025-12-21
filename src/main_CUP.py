@@ -10,7 +10,7 @@ cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y = data.re
 train_min = cup_train_X.min(axis=0) 
 train_max = cup_train_X.max(axis=0)
 
-activation_type = "tanh"
+activation_type = "sigmoid"
 
 if activation_type=="tanh":
     target_min = -1
@@ -29,15 +29,15 @@ cup_train_y = data.normalize(cup_train_y, target_min, target_max, cup_train_y.mi
 # np.savetxt("cuptest.csv", cup_test_X, delimiter=",", fmt='%.4f')
 
 network_structure = [cup_test_X.shape[1]]
+network_structure.append(8)
 network_structure.append(6)
-network_structure.append(4)
 network_structure.append(cup_test_y.shape[1])
-eta = 0.1
+eta = 0.7
 
 print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0000001, algorithm='sgd', activation_type=activation_type, eta_plus=1.2, eta_minus=0.5, weight_initializer="def")
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.000001, algorithm='sgd', activation_type=activation_type, eta_plus=1.2, eta_minus=0.5, weight_initializer="def")
 print("Start training...")
-net.fit(cup_train_X, cup_train_y, cup_val_X, cup_val_y, epochs=1000, batch_size=20, patience=20)
+net.fit(cup_train_X, cup_train_y, cup_val_X, cup_val_y, epochs=1000, batch_size=64, patience=50)
 
 y_pred = net.predict(cup_train_X)
 training_errors =  0.5 * (y_pred - cup_train_y) ** 2 # half mse

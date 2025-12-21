@@ -8,7 +8,6 @@ from joblib import Parallel, delayed
 import contextlib
 import joblib
 
-
 @contextlib.contextmanager
 def tqdm_joblib(tqdm_object):
     class TqdmBatchCompletionCallback(joblib.parallel.BatchCompletionCallBack):
@@ -25,7 +24,7 @@ def tqdm_joblib(tqdm_object):
         tqdm_object.close()
 
 def main():
-    X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk1(one_hot=True, dataset_shuffle=True)
+    X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=True, dataset_shuffle=True)
 
     # Normalization
     # X_train_normalized = data.normalize(X_train, 0, 1, X_train.min(axis=0), X_train.max(axis=0))
@@ -38,27 +37,15 @@ def main():
     batch_size.append(X_train_normalized.shape[0])
     
     
-    '''    param_grid = {
-        "batch_size": [1, 2, 8, 16, X_train_normalized.shape[0]],
-        "algorithm": ["sgd", "rprop", "quickprop"],
-        "eta": [0.7, 0.9],
-        "network_structure": [[2], [3], [4]],
-        "decay": [0.9, 0.75],
-        "loss_type": ["half_mse", "mae"],
-        "l2_reg": [0.0, 0.000001, 0.00001, 0.0001],
-        "activation": ["sigmoid", "tanh"],
-        "weight_init": ["xavier", "def"]
-    }'''
-
     param_grid = {
-        "batch_size": [1, 8],
+        "batch_size": [2, 8, 16, 32],
         "algorithm": ["sgd"],
-        "eta": [0.7],
-        "network_structure": [[2], [3], [4]],
+        "eta": [0.5, 0.6, 0.7, 0.9],
+        "network_structure": [[6], [8], [12]],
         "decay": [0.9],
-        "loss_type": ["half_mse", "mae"],
-        "l2_reg": [0.0, 0.000001, 0.00001],
-        "activation": ["sigmoid", "tanh"],
+        "loss_type": ["half_mse"],
+        "l2_reg": [0.0, 0.000001, 0.00001, 0.001],
+        "activation": ["sigmoid"],
         "weight_init": ["def"]
     }
 
@@ -86,7 +73,7 @@ def main():
 
     print(f"Running {len(grid_args)} grid points in parallel...")
     with tqdm_joblib(tqdm(total=len(grid_args), desc="Grid search")):
-        all_results = Parallel(n_jobs=4)(
+        all_results = Parallel(n_jobs=3)(
             delayed(evaluate_grid_point)(args)
             for args in grid_args
         )
@@ -101,7 +88,7 @@ def main():
                 f"hidden_layers={res['hidden_layers']}, decay={res['decay']}, "
                 f"loss={res['loss_type']}, l2={res['l2_reg']}, "
                 f"act={res['activation']}, init={res['weight_init']} "
-                f"→ median val loss={res['median_val_loss']:.6f}"
+                f"-> median val loss={res['median_val_loss']:.6f}"
             )
             f.write(f"\nIndividual runs: {res['runs']}")
     
@@ -176,12 +163,12 @@ def run_single_experiment(X_train, y_train, X_val, y_val, batch_size, algorithm,
                            activation_type=activation,
                            weight_initalizer=weight_init)
     
-    net.fit(X_train, y_train, X_val, y_val, batch_size=batch_size, patience=10, verbose=False)
+    net.fit(X_train, y_train, X_val, y_val, batch_size=batch_size, patience=50, verbose=False)
     return net.best_val_loss
 
 def evaluate_configuration(X_train, y_train, X_val, y_val, batch_size, algorithm, eta, hidden_layers, decay, loss_type, l2_reg, activation, weight_init):
     results = []
-    for i in range(3):
+    for i in range(1):
         results.append(run_single_experiment(
             X_train, y_train, X_val, y_val,
             batch_size, algorithm, eta,
