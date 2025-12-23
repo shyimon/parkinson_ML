@@ -114,6 +114,8 @@ class GridSearch:
                 val_loss = np.mean(nn.compute_loss(self.y_val, y_pred_val, params['loss_type']))
                 test_loss = np.mean(nn.compute_loss(self.y_test, y_pred_test, params['loss_type']))
                 
+                val_mee = MEE(self.y_val, y_pred_val)
+                
                 results = {
                     'train_loss': train_loss,
                     'val_loss': val_loss,
@@ -190,8 +192,10 @@ class GridSearch:
             if results is not None:
                 all_results.append((params, results))
                 
-                # Usa validation loss come metrica principale
-                current_score = results['min_val_loss']
+                if self.dataset_name == 'cup':
+                    current_score = results['val_mee']
+                else:
+                    current_score = results['min_val_loss']
                 
                 if current_score < best_score:
                     best_score = current_score
@@ -208,7 +212,9 @@ class GridSearch:
         print("="*80)
         
         # Trova i migliori risultati
-        all_results.sort(key=lambda x: x[1]['min_val_loss'])
+        if self.dataset_name == 'cup':
+            all_results.sort(key=lambda x: x[1]['val_mee'])
+        
         top_n = min(5, len(all_results))
         
         for i, (params, results) in enumerate(all_results[:top_n]):
@@ -284,7 +290,11 @@ class GridSearch:
             
             if results is not None:
                 fine_results.append((params, results))
-                current_score = results['min_val_loss']
+                
+                if self.dataset_name == 'cup':
+                    current_score = results['val_mee']
+                else:
+                    current_score = results['min_val_loss']
                 
                 if current_score < best_fine_score:
                     best_fine_score = current_score
@@ -295,10 +305,15 @@ class GridSearch:
         print("="*80)
         
         # Ordina i risultati
-        fine_results.sort(key=lambda x: x[1]['min_val_loss'])
+        if self.dataset_name == 'cup':
+            fine_results.sort(key=lambda x: x[1]['val_mee'])
+        else:
+            fine_results.sort(key=lambda x: x[1]['min_val_loss'])
         
         for i, (params, results) in enumerate(fine_results[:3]):
             print(f"\nPosizione {i+1}:")
+            if self.dataset_name == 'cup':
+                print(f"Validation MEE: {results['val_mee']:.6f}")
             print(f"Validation Loss: {results['min_val_loss']:.6f}")
             if self.dataset_name in ['monk1', 'monk2', 'monk3']:
                 print(f"Test Accuracy: {results['test_accuracy']:.4f}")

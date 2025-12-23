@@ -1,5 +1,7 @@
 import os
 from sys import platform
+import numpy as np
+
 if platform == "win32":
     graphviz_path = r"C:\Graphviz\bin"
     os.environ["PATH"] = graphviz_path + os.pathsep + os.environ["PATH"]
@@ -33,14 +35,19 @@ def draw_network(layers, path="img/network"):
                 if layers[layer][neuron].weights[connection] > max_w:
                     max_w = layers[layer][neuron].weights[connection]
 
+    scaled_min = np.log1p(abs(min_w))
+    scaled_max = np.log1p(abs(max_w))
+
     for layer in range(1, len(layers), 1):
         for neuron in range(len(layers[layer])):
             for connection in range(len(layers[layer - 1])):
                 w = layers[layer][neuron].weights[connection]
-                color = "red"
-                penwidth = str((w - min_w) / (max_w - min_w) * (2 - 0.1) + 0.1)
+                w_abs = abs(w)
+                color = "#DC143C" if w > 0 else "#1E90FF"
+                scaled = (w_abs / abs(max_w)) ** 0.4
+                penwidth = str(scaled * (2.0 - 0.2) + 0.2)
                 label = f"{w:.3f}"
-                dot.edge(f"{layer - 1}_{connection}", f"{layer}_{neuron}", color=color, penwidth=penwidth, taillabel=label, labelangle="0", labeldistance="7")
+                dot.edge(f"{layer - 1}_{connection}", f"{layer}_{neuron}", color=color, penwidth=penwidth, taillabel=label, labelangle="0", labeldistance="8")
 
 
     dot.render(path, cleanup=True)

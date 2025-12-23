@@ -1,0 +1,29 @@
+one_hot=True
+X_train, y_train, X_val, y_val, X_test, y_test = data.return_monk3(one_hot=one_hot, dataset_shuffle=True)
+activation_type = "sigmoid"
+
+network_structure = [X_train_normalized.shape[1]]
+network_structure.append(4)  # Hidden layer with 4 neurons
+network_structure.append(2)  # Hidden layer with 4 neurons
+network_structure.append(1)  # Output layer with 1 neuron
+eta = 0.6        # Learning rate
+
+# Network is created and trained
+print("Creating neural network with huber loss...")
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="half_mse", l2_lambda=0.0000000001, algorithm="sgd", activation_type=activation_type, eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.95, weight_initialzer="def", momentum=0.2)
+print("Start training with rprop...")
+best_val = net.fit(X_train_normalized, y_train, X_val_normalized, y_val, epochs=1500, batch_size=2, patience=100)
+
+Early stopping at epoch 214 | Best Val Loss: 0.060717
+
+Epoch 214, Loss: 0.006238
+Validation Loss: 0.066801
+
+Best validation: 0.060717
+Calculating accuracy...
+
+Final Training Accuracy: 98.82%
+Test Accuracy: 99.07%
+Details:
+Correctly predicted training patterns: 84/85
+Correctly predicted test patterns: 428/432

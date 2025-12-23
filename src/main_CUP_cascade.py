@@ -1,29 +1,39 @@
 import numpy as np
 import data_manipulation as data
 from cascade_correlation import CascadeNetwork
-import pandas as pd
 import matplotlib.pyplot as plt
 
-tr_X, tr_y, val_X, val_y, te_X, te_y = data.return_CUP()
+tr_X, tr_y, val_X, val_y, te_X, te_y = data.return_CUP() # Caricamento dati CUP
 
-cup_train_X = np.vstack((tr_X, val_X))
-cup_train_y = np.vstack((tr_y, val_y))
+cup_train_X = np.vstack((tr_X, val_X)) 
+cup_train_y = np.vstack((tr_y, val_y)) 
 
 cup_test_X = te_X
 cup_test_y = te_y
 
-cup_train_X, _, cup_test_X = data.normalize_dataset(cup_train_X, cup_train_X, cup_test_X, min_val=-1, max_val=1)
-cup_train_y, _, cup_test_y = data.normalize_dataset(cup_train_y, cup_train_y, cup_test_y, min_val=-1, max_val=1)
+x_min = cup_train_X.min(axis=0)
+x_max = cup_train_X.max(axis=0)
+
+cup_train_X = data.normalize(cup_train_X, -1, 1, x_min, x_max)
+cup_test_X = data.normalize(cup_test_X, -1, 1, x_min, x_max)
+
+y_min = cup_train_y.min(axis=0)
+y_max = cup_train_y.max(axis=0)
+
+cup_train_y = data.normalize(cup_train_y, -1, 1, y_min, y_max)
+cup_test_y = data.normalize(cup_test_y, -1, 1, y_min, y_max)
 
 n_inputs = cup_train_X.shape[1]
 n_outputs = cup_train_y.shape[1]
 
-eta = 0.7 
+eta = 0.05
+patience = 30
+max_units = 10
 
 print(f"Creating Cascade Network: {n_inputs} Inputs -> {n_outputs} Outputs")
 print("Algorithm: Quickprop")
 
-net = CascadeNetwork(n_inputs, n_outputs, learning_rate=0.05, algorithm='quickprop')
+net = CascadeNetwork(n_inputs, n_outputs, eta, algorithm='quickprop')
 
 print("Start training Phase 0 (Linear Training)...")
 
