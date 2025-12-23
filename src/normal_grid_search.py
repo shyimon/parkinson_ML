@@ -432,15 +432,16 @@ class GridSearch:
 def main():
     # Scegli il dataset da usare
     # Opzioni: 'monk1', 'monk2', 'monk3', 'cup'
-    # dataset_name = 'monk1'  # Cambia questo per testare dataset diversi
+        dataset_name = 'monk1'  # Cambia questo per testare dataset diversi
     
     # Crea e esegui la grid search
-    datasets = ['monk1', 'monk2', 'monk3', 'cup']
-    for dataset in datasets:
-        print(f"\n\n{'#'*80}")
-        print(f"ESECUZIONE PER DATASET: {dataset}")
-        print(f"{'#'*80}")
-        grid_search = GridSearch(dataset_name=dataset)
+    # datasets = ['monk1', 'monk2', 'monk3', 'cup']
+    # for dataset in datasets:
+    #    print(f"\n\n{'#'*80}")
+    #    print(f"ESECUZIONE PER DATASET: {dataset}")
+    #    print(f"{'#'*80}")
+    #    grid_search = GridSearch(dataset_name=dataset)
+        grid_search = GridSearch(dataset_name=dataset_name)
         grid_search.run()
 
 
