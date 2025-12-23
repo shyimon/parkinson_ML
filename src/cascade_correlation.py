@@ -2,7 +2,7 @@ import numpy as np
 import neuron as nrn
 
 class CascadeNetwork:
-    def __init__(self, n_inputs, n_outputs, learning_rate=0.1, algorithm="quickprop"):
+    def __init__(self, n_inputs, n_outputs, learning_rate=0.1, algorithm="quickprop", l2_lambda=0.0):
         """
         Inizializza la rete per la Fase 0 in cui non c'è nessuna unità nascosta.
         """
@@ -10,6 +10,7 @@ class CascadeNetwork:
         self.n_outputs = n_outputs
         self.learning_rate = learning_rate
         self.algorithm = algorithm
+        self.l2_lambda = l2_lambda
         
         # La classe CascadeNetwork incapsula i neuroni di output 
         # e il costruttore provvede a costruire i neuroni autonomamente
@@ -29,6 +30,8 @@ class CascadeNetwork:
         # Qui verranno salvati i neuroni nascosti più avanti
         # e sarà l'algoritmo in modo autonomo a decidere se e quanti aggiungerne
         self.hidden_units = []
+        self.loss_history = []
+        self.val_loss_history = []
 
     def forward(self, input_pattern):
         """
@@ -51,12 +54,38 @@ class CascadeNetwork:
             
         return np.array(outputs)
     
-    def train_phase_0(self, X, y, epochs=1000, tolerance=0.01, patience=20):
+    def calculate_loss(self, X, y):
+        """Calcola la loss (MSE) su un dato set (es. Validation)"""
+        if len(X) == 0: return 0.0
+        
+        total_error = 0.0
+        for i in range(len(X)):
+            pattern = X[i]
+            target_pattern = y[i]
+            outputs = self.forward(pattern)
+            
+            for idx in range(len(self.output_neurons)):
+                if isinstance(target_pattern, (list, np.ndarray)):
+                    target = target_pattern[idx]
+                else:
+                    target = target_pattern
+                output = outputs[idx]
+                total_error += 0.5 * (target - output) ** 2
+        
+        return total_error / len(X)
+    
+    def train_phase_0(self, X, y, X_val=None, y_val=None, epochs=1000, tolerance=0.01, patience=20):
         """
         Addestramento dei pesi Input -> Output.
         X: Dataset di input
         y: Target 
         """
+        
+        if not hasattr(self, 'loss_history'):
+            self.loss_history = []
+        if not hasattr(self, 'val_loss_history'):
+            self.val_loss_history = []
+            
         min_error = float('inf') # Inizializza il minimo errore a infinito
         patience_counter = 0 # Contatore per la logica di early stopping
         batch_size = len(X) # Usiamo full-batch perché la Cascade Correlation lo richiede   
@@ -85,14 +114,21 @@ class CascadeNetwork:
                     neuron.compute_delta(error_signal) # Calcola il delta per il neurone di output
                     output = outputs[idx]
                     error_signal = target - output
-                    neuron.compute_delta(error_signal) # Calcola il delta per il neurone di output
                     neuron.accumulate_gradients() # Accumula i gradienti per il neurone di output
+            
+            current_train_loss = total_error / batch_size
+            self.loss_history.append(current_train_loss) # Salva l'errore medio per epoca
+            
+            if X_val is not None and y_val is not None:
+                val_loss = self.calculate_loss(X_val, y_val)
+                self.val_loss_history.append(val_loss)
 
             for neuron in self.output_neurons: # Dopo aver processato tutto il batch, aggiorna i pesi
                 neuron.apply_accumulated_gradients(
                     eta=self.learning_rate,
                     batch_size=batch_size,
-                    algorithm=self.algorithm
+                    algorithm=self.algorithm,
+                    l2_lambda=self.l2_lambda
                 )
             
             if epoch % 100 == 0: # Stampa l'errore ogni 100 epoche
@@ -105,7 +141,7 @@ class CascadeNetwork:
                 patience_counter += 1
             
             if patience_counter >= patience:
-                print(f"Convergenza raggiunta (o stallo) all'epoca {epoch}. Errore finale: {total_error:.5f}")
+                # print(f"Convergenza raggiunta (o stallo) all'epoca {epoch}. Errore finale: {total_error:.5f}")
                 break
         
         return total_error # Per capire se la Cascade Correlation deve aggiungere un nuovo neurone nascosto (lo aggiunge quando l'errore è alto)
@@ -141,10 +177,13 @@ class CascadeNetwork:
                 
         print(f"Neurone nascosto aggiunto. Totale neuroni nascosti: {len(self.hidden_units)}")
         
-    def train(self, X, y, max_epochs=2000, tolerance=0.01, patience=50, max_hidden_units=10):
+    def train(self, X, y, X_val=None, y_val=None, max_epochs=2000, tolerance=0.01, patience=50, max_hidden_units=10):
+        
+        self.loss_history = []
+        self.val_loss_history = []
         
         print("Inizio addestramento (Fase 0)...")
-        current_error = self.train_phase_0(X, y, epochs=max_epochs, tolerance=tolerance, patience=patience)
+        current_error = self.train_phase_0(X, y, X_val=X_val, y_val=y_val, epochs=max_epochs, tolerance=tolerance, patience=patience)
         print(f"Fase 0 completata. Errore: {current_error:.5f}")
         
         while current_error > tolerance and len(self.hidden_units) < max_hidden_units:
@@ -153,7 +192,7 @@ class CascadeNetwork:
             best_candidate = self._train_candidates(X, residuals)
             self._install_candidate(best_candidate)
             print("Riadattamento pesi output...")
-            current_error = self.train_phase_0(X, y, epochs=max_epochs, tolerance=tolerance, patience=patience//2) 
+            current_error = self.train_phase_0(X, y, X_val=X_val, y_val=y_val, epochs=max_epochs, tolerance=tolerance, patience=patience//2) 
             
             if current_error < tolerance:
                 print("SUCCESSO: Obiettivo raggiunto!")
