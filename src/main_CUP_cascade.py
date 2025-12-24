@@ -37,7 +37,7 @@ net = CascadeNetwork(n_inputs, n_outputs, eta, algorithm='quickprop')
 
 print("Start training Phase 0 (Linear Training)...")
 
-final_error = net.train(cup_train_X, cup_train_y, max_epochs=2000, tolerance=0.001, patience=30, max_hidden_units=10)
+final_error = net.train(cup_train_X, cup_train_y, X_val=cup_test_X, y_val=cup_test_y, max_epochs=2000, tolerance=0.001, patience=30, max_hidden_units=10)
 
 print(f"Phase 0 ended. Residual Error: {final_error:.5f}")
 

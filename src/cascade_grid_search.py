@@ -52,16 +52,17 @@ class CascadeGridSearch:
                 algorithm=params['algorithm']
             )
 
-            loss_history = net.train(
+            _ = net.train(
                 self.X_train, self.y_train, 
+                X_val = self.X_val, y_val = self.y_val,
                 max_epochs=params.get('epochs', 1000), 
                 tolerance=params['tolerance'], 
                 patience=params['patience'], 
                 max_hidden_units=params['max_hidden_units']
             )
             
-            print(f"DEBUG TYPE: {type(loss_history)}")
-            print(f"DEBUG CONTENT: {loss_history}") # Stampe di debug
+            loss_history = net.loss_history
+            val_loss_history = net.val_loss_history
             
             y_pred_train = np.array([net.forward(x) for x in self.X_train])
             y_pred_val = np.array([net.forward(x) for x in self.X_val])
@@ -76,7 +77,8 @@ class CascadeGridSearch:
                 'val_loss': val_loss,
                 'test_loss': test_loss,
                 'min_val_loss': val_loss, 
-                'history': loss_history
+                'history': loss_history,
+                'val_history': val_loss_history
             }
             
             if self.dataset_name != 'cup':
@@ -96,30 +98,60 @@ class CascadeGridSearch:
     def coarse_grid_search(self):
         print("INIZIO COARSE SEARCH CASCADE")
 
-        param_grid = {
-            'learning_rate': [0.01, 0.05, 0.1],   
-            'patience': [20, 50],                 
-            'tolerance': [0.01, 0.001],           
-            'max_hidden_units': [5, 10, 15],  # Importante per limitare la crescita    
-            'algorithm': ['quickprop', 'rprop'],
-            'epochs': [1000] # Solitamente fisso alto, tanto si ferma con la pazienza
-        }
+        if self.dataset_name == 'cup':
+            
+            param_grid = {
+                'learning_rate': [0.005, 0.01, 0.05],   
+                'patience': [30, 50, 70],                 
+                'tolerance': [0.001, 0.005, 0.01],           
+                'max_hidden_units': [5, 10, 15],  # Importante per limitare la crescita    
+                'algorithm': ['sgd', 'quickprop', 'rprop'],
+                'l2_lambda': [0.0001, 0.001, 0.01],  # Aggiunta regolarizzazione L2
+                'epochs': [2000], # Solitamente fisso alto, tanto si ferma con la pazienza
+                'momentum': [0.0],  
+                'mu': [0.0],
+                'eta_plus': [0.0],
+                'eta_minus': [0.0]
+            }
+        else:
+            param_grid = {
+                'learning_rate': [0.01, 0.05, 0.1],   
+                'patience': [20, 30],                 
+                'tolerance': [0.01, 0.02, 0.05],           
+                'max_hidden_units': [1, 2],  # Importante per limitare la crescita    
+                'algorithm': ['rprop', 'quickprop'],
+                'momentum': [0.0],  
+                'mu': [1.25, 1.5, 1.75],      # Solo per Quickprop
+                'eta_plus': [1.1, 1.2, 1.3],  # Solo per RPROP
+                'eta_minus': [0.4, 0.5, 0.6], # Solo per RPROP
+                'epochs': [1000], # Solitamente fisso alto, tanto si ferma con la pazienza
+                'l2_lambda': [0.01, 0.05, 0.1]
+            }
         
         # Filtra i parametri non necessari per certi algoritmi
         all_combinations = []
+        default_mu = param_grid['mu'][0]
+        default_ep = param_grid['eta_plus'][0]
+        default_em = param_grid['eta_minus'][0]
+        
         for combo in itertools.product(*param_grid.values()):
             params = dict(zip(param_grid.keys(), combo))
             
+            algo = params['algorithm']
             # Filtra combinazioni inappropriate
-            if params['algorithm'] == 'sgd' and params['momentum'] == 0.0:
-                # Per SGD senza momentum, non serve mu
-                params['mu'] = 1.75  # Valore di default
+            if algo == 'sgd':
+                if params['mu'] != default_mu or params['eta_plus'] != default_ep or params['eta_minus'] != default_em:
+                    continue
                 all_combinations.append(params)
-            elif params['algorithm'] in ['rprop', 'quickprop']:
-                # Per RPROP e Quickprop, non usiamo momentum
-                params['momentum'] = 0.0
+            elif algo == 'rprop':
+                if params['momentum'] != 0.0 or params['mu'] != default_mu:
+                    continue
                 all_combinations.append(params)
-        
+            elif algo == 'quickprop':
+                if params['momentum'] != 0.0 or params['eta_plus'] != default_ep or params['eta_minus'] != default_em:
+                    continue
+            all_combinations.append(params)
+                
         print(f"Numero totale di combinazioni: {len(all_combinations)}")
         
         best_score = float('inf')
@@ -249,22 +281,24 @@ class CascadeGridSearch:
         """Crea grafici dei risultati"""
         fig, axes = plt.subplots(1, 2, figsize=(15, 5))
         
-        training_loss = []
-        validation_loss = []
-            
-        # History è una lista o array numpy
-        if isinstance(history, (list, np.ndarray)):
-            training_loss = history
-            validation_loss = [] 
+        # 1. Recupera le liste corrette
+        training_loss = history
+        # Cerca 'val_history' nel dizionario dei risultati, se non c'è usa lista vuota
+        validation_loss = results.get('val_history', []) 
         
         # Grafico 1: Loss Curves
         axes[0].plot(training_loss, label='Training Loss', alpha=0.7)
         
+        # 2. Plotta la validation solo se contiene dati
         if len(validation_loss) > 0:
-            axes[0].plot(validation_loss, label='Validation Loss', alpha=0.7)
+            axes[0].plot(validation_loss, label='Validation Loss', alpha=0.7, linestyle='--')
+            
             # Minima validation loss
             min_val_idx = np.argmin(validation_loss)
-            axes[0].axvline(x=min_val_idx, color='r', linestyle='--', alpha=0.5)
+            min_val_val = validation_loss[min_val_idx]
+            axes[0].axvline(x=min_val_idx, color='r', linestyle=':', alpha=0.5)
+            # Aggiunge un pallino nel punto di minimo
+            axes[0].scatter(min_val_idx, min_val_val, c='red', s=30, zorder=5, label='Min Val Loss')
             
         axes[0].set_xlabel('Epoche')
         axes[0].set_ylabel('Loss')
@@ -272,7 +306,7 @@ class CascadeGridSearch:
         axes[0].legend()
         axes[0].grid(True, alpha=0.3)
         
-        # Grafico 2: Bar plot delle metriche finali
+        # Grafico 2: Bar plot delle metriche finali 
         if self.dataset_name in ['monk1', 'monk2', 'monk3']:
             metrics = ['Train Acc', 'Val Acc', 'Test Acc']
             values = [results.get('train_accuracy', 0), results.get('val_accuracy', 0), results.get('test_accuracy', 0)]
@@ -300,10 +334,9 @@ class CascadeGridSearch:
         # Salva il grafico
         filename = f'cascade_results_{self.dataset_name}.png'
         plt.savefig(filename, dpi=150, bbox_inches='tight')
-         # plt.show()
         
         print(f"\nGrafico salvato come: {filename}")
-    
+        
     def run(self):
         #esegue la grid search completa
         print(f"\n{'='*80}")
