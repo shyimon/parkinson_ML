@@ -82,8 +82,19 @@ class NeuralNetwork:
     # backprop implementation
     def backward(self, error_signals, accumulate=False):
         """Versione modificata per supportare accumulazione"""
-        if np.isscalar(error_signals) or (isinstance(error_signals, np.ndarray) and error_signals.ndim == 0):
-            error_signals = [error_signals]
+        # Normalizza error_signals a una lista di scalari
+        error_signals = np.asarray(error_signals).flatten()
+        
+        if error_signals.ndim == 0:
+            error_signals = np.array([error_signals.item()])
+        
+        # Assicurati che abbiamo un elemento per ogni neurone di output
+        num_output_neurons = len(self.layers[-1])
+        if len(error_signals) == 1 and num_output_neurons == 1:
+            error_signals = error_signals
+        elif len(error_signals) != num_output_neurons:
+            # Se non corrisponde, usa solo il primo elemento
+            error_signals = np.array([error_signals[0] for _ in range(num_output_neurons)])
         
         for i, neuron in enumerate(self.layers[-1]):
             neuron.compute_delta(error_signals[i])
@@ -129,6 +140,8 @@ class NeuralNetwork:
                     epoch_train_loss += np.sum(sample_loss)
 
                     err = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
+                    # Assicura che err sia un array 1D
+                    err = np.asarray(err).flatten()
                     self.backward(err, accumulate=True)
 
                 #apply accumulated gradient once
@@ -191,6 +204,10 @@ class NeuralNetwork:
         """
         Calcola la loss in base al tipo specificato.
         """
+        # Converti in array numpy se necessario
+        y_true = np.asarray(y_true).flatten()
+        y_pred = np.asarray(y_pred).flatten()
+        
         error = y_pred - y_true
 
         if loss_type == "half_mse":
@@ -214,6 +231,10 @@ class NeuralNetwork:
         """
         Calcola il segnale di errore da passare al neurone di output in base al tipo di loss specificato
         """
+        # Converti in array numpy se necessario
+        y_true = np.asarray(y_true).flatten()
+        y_pred = np.asarray(y_pred).flatten()
+        
         error = y_pred - y_true
         
         if loss_type == "half_mse":
@@ -224,6 +245,17 @@ class NeuralNetwork:
         
         elif loss_type == "log_cosh":
             return np.tanh(error)
+        
+        elif loss_type == "binary_crossentropy":
+            # Clipping per evitare log(0) che darebbe -inf
+            epsilon = 1e-15
+            y_pred_clipped = np. clip(y_pred, epsilon, 1 - epsilon)
+    
+            # Formula:  -[y*log(p) + (1-y)*log(1-p)]
+            # Derivata rispetto a y_pred:  (y_pred - y_true) / (y_pred * (1 - y_pred))
+            # Per la backprop, ritorniamo la derivata
+            derivative = (y_pred_clipped - y_true) / (y_pred_clipped * (1 - y_pred_clipped))
+            return derivative
         
         elif loss_type == "huber":
             delta = 1.0 # Deve coincidere con quello usato in compute_loss

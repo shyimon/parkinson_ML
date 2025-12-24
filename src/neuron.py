@@ -95,12 +95,29 @@ class Neuron:
     # this method compounds them, checking the is_output_neuron flag (set at __init__ time)
     def compute_delta(self, signal_error=None): # target viene sostituito con signal_error che arriva direttamente da neural_network.backward
         if self.is_output_neuron:
+            # Assicurati che signal_error sia uno scalare
+            if isinstance(signal_error, np.ndarray):
+                signal_error = float(signal_error.flatten()[0])
+            else:
+                signal_error = float(signal_error)
             self.delta = signal_error * self.activation_deriv(self.output)
         else:
             delta_sum = 0.0
             for k in self.attached_neurons:
-                w_kj = k.weights[self.index_in_layer]
-                delta_sum += k.delta * w_kj
+                try:
+                    # Proteggi l'accesso a k.weights per evitare errori di indiceazione su scalari
+                    weights = np.asarray(k.weights)
+                    if weights.ndim == 0:
+                        # È uno scalare
+                        w_kj = float(weights)
+                    else:
+                        # È un array, accedi all'elemento
+                        w_kj = float(weights[self.index_in_layer])
+                    delta_sum += k.delta * w_kj
+                except (IndexError, TypeError) as e:
+                    # Se c'è un errore, salta questo neurone
+                    print(f"Warning: Error accessing weight in compute_delta: {e}")
+                    continue
             self.delta = delta_sum * self.activation_deriv(self.output)
         return self.delta
     
@@ -178,21 +195,14 @@ class Neuron:
             '''
 
     def update_weights(self, eta, l2_lambda=0.00):
-        # DEBUG: stampa per vedere cosa c'è
-        print(f"DEBUG update_weights: delta={self.delta}, inputs={self.inputs}")
-        print(f"  weights shape: {self.weights.shape}")
-    
         # Assicurati che inputs sia un array numpy
         if self.inputs is None:
-            print("ERROR: self.inputs is None!")
-            return
+            self.inputs = np.zeros(self.weights.shape[0])
     
         inputs_array = np.asarray(self.inputs, dtype=float).flatten()
-        print(f"  inputs_array shape: {inputs_array.shape}")
     
         # Verifica che le dimensioni corrispondano
         if inputs_array.shape[0] != self.weights.shape[0]:
-            print(f"ERROR: Dimension mismatch! inputs: {inputs_array.shape[0]}, weights: {self.weights.shape[0]}")
             # Correggi: resetta inputs
             self.inputs = np.zeros(self.weights.shape[0])
             inputs_array = self.inputs

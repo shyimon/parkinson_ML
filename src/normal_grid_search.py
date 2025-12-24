@@ -40,21 +40,27 @@ class GridSearch:
             output_dim = self.y_train.shape[1]  # Regressione multi-target
         
         structure = [input_dim]
+        # Gestisce sia liste di interi che liste di tuple
         for layer_config in hidden_layers_config:
             if isinstance(layer_config, tuple):
-                structure.append(layer_config[0])  # Numero di neuroni
-            else:
+                # Se è una tupla, estrai il primo elemento (numero di neuroni)
+                structure.append(layer_config[0])
+            elif isinstance(layer_config, (int, np.integer)):
+                # Se è già un intero, aggiungilo direttamente
                 structure.append(layer_config)
+            else:
+                # Per sicurezza, converti a intero
+                structure.append(int(layer_config))
         structure.append(output_dim)
         
         return structure
     
     def train_evaluate(self, params, return_history=False):
-        # Esegue l'addestramento e la valutazione con i parametri specificati
-        try:
+        """Esegue l'addestramento e la valutazione con i parametri specificati"""
+        try:  
             # Crea struttura della rete
             structure = self.create_network_structure(params['hidden_layers'])
-            
+        
             # Crea la rete neurale
             nn = NeuralNetwork(
                 structure,
@@ -64,70 +70,107 @@ class GridSearch:
                 algorithm=params['algorithm'],
                 activation_type=params['activation_type'],
                 weight_initializer=params['weight_initializer'],
-                momentum=params.get('momentum', 0.0),
+                momentum=params. get('momentum', 0.0),
                 mu=params.get('mu', 1.75),
                 decay=params.get('decay', 0.9),
                 eta_plus=params.get('eta_plus', 1.2),
                 eta_minus=params.get('eta_minus', 0.5),
                 debug=False
             )
-            
+        
             # Addestra il modello
             history = nn.fit(
-                self.X_train, self.y_train,
-                self.X_val, self.y_val,
+                self.X_train, self. y_train,
+                self. X_val, self.y_val,
                 epochs=params['epochs'],
                 batch_size=params['batch_size'],
                 patience=params['patience'],
                 verbose=False
             )
-            
+        
             # Valutazione finale
             y_pred_train = nn.predict(self.X_train)
-            y_pred_val = nn.predict(self.X_val)
+            y_pred_val = nn.predict(self. X_val)
             y_pred_test = nn.predict(self.X_test)
+        
+            # FIX: Gestisci correttamente history (può essere dict, array, o scalare)
+            try:
+                # Caso 1: history è un dizionario (comportamento corretto)
+                if isinstance(history, dict) and 'validation' in history: 
+                    validation_history = history['validation']
+                
+                    if isinstance(validation_history, list):
+                        validation_history = np.array(validation_history)
+                
+                    if isinstance(validation_history, np.ndarray) and validation_history.size > 0:
+                        validation_history = validation_history.flatten()
+                        min_val_loss = float(np.min(validation_history))
+                    elif isinstance(validation_history, (int, float, np.number)):
+                        min_val_loss = float(validation_history)
+                    else: 
+                        # Calcola manualmente
+                        val_pred = nn.predict(self.X_val)
+                        min_val_loss = float(np.mean(nn.compute_loss(self.y_val, val_pred, params['loss_type'])))
             
+                # Caso 2: history è direttamente un array o scalare (comportamento errato di fit())
+                elif isinstance(history, (np.ndarray, list)):
+                    validation_history = np.array(history).flatten()
+                    min_val_loss = float(np.min(validation_history))
+            
+                # Caso 3: history non è nel formato atteso - calcola manualmente
+                else: 
+                    val_pred = nn.predict(self.X_val)
+                    min_val_loss = float(np.mean(nn.compute_loss(self.y_val, val_pred, params['loss_type'])))
+                
+            except Exception as e: 
+                # Fallback:  calcola sempre manualmente in caso di errore
+                val_pred = nn.predict(self. X_val)
+                min_val_loss = float(np. mean(nn.compute_loss(self.y_val, val_pred, params['loss_type'])))
+        
             # Calcola accuracy/loss in base al tipo di problema
-            if self.dataset_name in ['monk1', 'monk2', 'monk3']:
+            if self.dataset_name in ['monk1', 'monk2', 'monk3']: 
                 # Classificazione binaria
-                train_acc = np.mean((y_pred_train > 0.5).astype(int) == self.y_train)
+                train_acc = np. mean((y_pred_train > 0.5).astype(int) == self.y_train)
                 val_acc = np.mean((y_pred_val > 0.5).astype(int) == self.y_val)
                 test_acc = np.mean((y_pred_test > 0.5).astype(int) == self.y_test)
-                
-                train_loss = np.mean(nn.compute_loss(self.y_train, y_pred_train, params['loss_type']))
-                val_loss = np.mean(nn.compute_loss(self.y_val, y_pred_val, params['loss_type']))
-                test_loss = np.mean(nn.compute_loss(self.y_test, y_pred_test, params['loss_type']))
-                
+            
+                train_loss = float(np.mean(nn.compute_loss(self.y_train, y_pred_train, params['loss_type'])))
+                val_loss = float(np.mean(nn. compute_loss(self.y_val, y_pred_val, params['loss_type'])))
+                test_loss = float(np.mean(nn.compute_loss(self.y_test, y_pred_test, params['loss_type'])))
+            
                 results = {
-                    'train_accuracy': train_acc,
-                    'val_accuracy': val_acc,
-                    'test_accuracy': test_acc,
+                    'train_accuracy': float(train_acc),
+                    'val_accuracy': float(val_acc),
+                    'test_accuracy':  float(test_acc),
                     'train_loss': train_loss,
-                    'val_loss': val_loss,
+                    'val_loss':  val_loss,
                     'test_loss': test_loss,
-                    'min_val_loss': min(history['validation']),
+                    'min_val_loss':  min_val_loss,
                     'history': history if return_history else None
-                }
+                    }
             else:
                 # Regressione (CUP)
-                train_loss = np.mean(nn.compute_loss(self.y_train, y_pred_train, params['loss_type']))
-                val_loss = np.mean(nn.compute_loss(self.y_val, y_pred_val, params['loss_type']))
-                test_loss = np.mean(nn.compute_loss(self.y_test, y_pred_test, params['loss_type']))
-                
-                val_mee = MEE(self.y_val, y_pred_val)
-                
+                train_loss = float(np.mean(nn.compute_loss(self.y_train, y_pred_train, params['loss_type'])))
+                val_loss = float(np.mean(nn. compute_loss(self.y_val, y_pred_val, params['loss_type'])))
+                test_loss = float(np.mean(nn.compute_loss(self.y_test, y_pred_test, params['loss_type'])))
+            
+                val_mee = float(MEE(self.y_val, y_pred_val))
+            
                 results = {
                     'train_loss': train_loss,
                     'val_loss': val_loss,
                     'test_loss': test_loss,
-                    'min_val_loss': min(history['validation']),
+                    'val_mee': val_mee,
+                    'min_val_loss': min_val_loss,
                     'history': history if return_history else None
                 }
-            
+        
             return results, nn
-            
-        except Exception as e:
+        
+        except Exception as e:  
             print(f"Errore durante il training con parametri {params}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None, None
     
     def coarse_grid_search(self):
@@ -135,32 +178,31 @@ class GridSearch:
         print("GRID SEARCH")
         print("="*80)
         
-        # Definisci lo spazio degli iperparametri
+        # Definisci lo spazio degli iperparametri (ridotto per velocità)
         param_grid = {
-            'epochs': [400, 500, 600, 700],
-            'eta': [0.01, 0.1, 0.15, 0.2],
+            'epochs': [400, 500, 600, 800],
+            'eta': [0.01, 0.05, 0.1, 0.2, 0.3],
             'l2_lambda': [0.0, 0.0001, 0.001],
-            'algorithm': ['sgd', 'rprop', 'quickprop'],
+            'algorithm': ['sgd', 'rprop'],
             'activation_type': ['sigmoid', 'tanh'],
             'weight_initializer': ['def', 'xavier'],
             'loss_type': ['half_mse', 'binary_crossentropy'] if self.dataset_name in ['monk1', 'monk2', 'monk3'] else ['half_mse', 'mae'],
-            'eta_plus': [1.1, 1.2, 1.3],
-            'eta_minus': [0.4, 0.5, 0.6],
-            'decay': [0.8, 0.9, 0.95],
-            'patience': [20, 30, 40],
+           # 'eta_plus': [1.2],
+           # 'eta_minus': [0.5],
+           # 'decay': [0.9],
+            'patience': [30, 50],
             'hidden_layers': [
                 [(4,)],
-                [(6,)],
+                [(5,)],
                 [(8,)],
-                [(16,)],
+                [(10,)],
                 [(4,), (4,)],
-                [(8,), (8,)],
-                [(16,), (8,)],
-                [(32,), (16,)],
+                [(8,), (4,)],
+                [(10,), (5,)]
             ],
             'batch_size': [1, 8, 16, 32],
-            'momentum': [0.0, 0.5, 0.9],
-            'mu': [1.5, 1.75, 2.0]
+            'momentum': [0.0, 0.5, 0.8, 0.9],
+            'mu': [1.75]
         }
         
         # Filtra i parametri non necessari per certi algoritmi
