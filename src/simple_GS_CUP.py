@@ -33,7 +33,7 @@ def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=5
         print(f"  Seed: {seed}, LR: {learning_rate}, L2: {l2_lambda}, Hidden: {hidden_units}")
     
     # Seed per riproducibilità
-    np.random. seed(seed)
+    np.random.seed(seed)
     
     # Carica i dati CUP
     X_train, y_train, X_val, y_val, X_test, y_test = return_CUP(
@@ -128,10 +128,7 @@ def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=5
 
 def grid_search_cup(n_seeds_per_config=3, learning_rates=None, l2_lambdas=None, 
                     momentums=None, hidden_units_list=None):
-    """
-    Grid search per CUP (regressione)
-    SELEZIONE BASATA SU VALIDATION MEE (non test!)
-    """
+
     if learning_rates is None:
         learning_rates = [0.01, 0.05, 0.1]
     
@@ -162,14 +159,14 @@ def grid_search_cup(n_seeds_per_config=3, learning_rates=None, l2_lambdas=None,
             for mom in momentums:
                 for hidden in hidden_units_list:
                     print(f"\n{'='*70}")
-                    print(f"🎯 TESTING LR={lr}, L2={l2}, Mom={mom}, Hidden={hidden}")
+                    print(f" TESTING LR={lr}, L2={l2}, Mom={mom}, Hidden={hidden}")
                     print(f"{'='*70}")
                     
                     for seed_idx in range(n_seeds_per_config):
                         current_run += 1
                         seed = seed_idx * 42 + int(lr * 10000) + int(l2 * 100000) + int(mom * 100) + hidden
                         
-                        print(f"\n🔄 Run {current_run}/{total_runs} - LR={lr}, L2={l2}, Mom={mom}, "
+                        print(f"\n Run {current_run}/{total_runs} - LR={lr}, L2={l2}, Mom={mom}, "
                               f"Hidden={hidden}, Seed={seed}", end=" → ")
                         
                         results = _cup_test(learning_rate=lr, seed=seed, l2_lambda=l2, 
@@ -181,7 +178,7 @@ def grid_search_cup(n_seeds_per_config=3, learning_rates=None, l2_lambdas=None,
                         if results['val_mee'] < best_val_mee:
                             best_val_mee = results['val_mee']
                             best_results = results
-                            print(f"   ✨ NUOVO BEST VAL MEE: {best_val_mee:.4f}")
+                            print(f"   NUOVO BEST VAL MEE: {best_val_mee:.4f}")
     
     print(f"\n{'='*70}")
     print(f" MIGLIOR CONFIGURAZIONE GRID SEARCH")
@@ -221,7 +218,7 @@ def retrain_and_track_errors(best_results):
     np.random.seed(best_results['seed'])
     
     # Ricrea la rete
-    params = best_results['params']. copy()
+    params = best_results['params'].copy()
     net = NeuralNetwork(**params)
     
     # Training manuale con tracking
@@ -256,8 +253,8 @@ def retrain_and_track_errors(best_results):
         train_mee = MEE(y_train, train_pred)
         val_mee = MEE(y_val, val_pred)
         
-        train_mee_history. append(train_mee)
-        val_mee_history. append(val_mee)
+        train_mee_history.append(train_mee)
+        val_mee_history.append(val_mee)
         
         # Early stopping
         if val_mee < best_val_mee:
@@ -310,9 +307,7 @@ def evaluate_on_test_set(net, X_test, y_test, normalization):
 
 def plot_results(train_results, train_mee_history, val_mee_history, test_results, 
                 save_path='cup_best_results.png'):
-    """
-    Crea grafici completi dei risultati
-    """
+
     train_mee = train_results['train_mee']
     val_mee = train_results['val_mee']
     test_mee = test_results['test_mee']
@@ -382,7 +377,7 @@ def plot_results(train_results, train_mee_history, val_mee_history, test_results
     plt.scatter(y_test[: , 0], predictions[:, 0], alpha=0.6, edgecolors='black', linewidth=0.5)
     
     # Linea ideale (y=x)
-    min_val = min(y_test[:, 0]. min(), predictions[:, 0].min())
+    min_val = min(y_test[:, 0].min(), predictions[:, 0].min())
     max_val = max(y_test[:, 0].max(), predictions[:, 0].max())
     plt.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='Perfect prediction')
     
@@ -400,17 +395,7 @@ def plot_results(train_results, train_mee_history, val_mee_history, test_results
 
 def plot_bias_variance_tradeoff(all_results, complexity_param='hidden_units', 
                                 dataset_name='MONK-1',
-                                save_path='bias_variance_tradeoff. png'):
-    """
-    Crea il grafico Bias-Variance Tradeoff classico
-    Mostra training e test error vs complessità del modello
-    
-    Args:
-        all_results: lista di risultati da grid search
-        complexity_param: 'hidden_units', 'epochs', o 'lr'
-        dataset_name: nome del dataset per il titolo
-        save_path: path del file output
-    """
+                                save_path='bias_variance_tradeoff.png'):
     import matplotlib.pyplot as plt
     import numpy as np
     from collections import defaultdict
@@ -421,24 +406,22 @@ def plot_bias_variance_tradeoff(all_results, complexity_param='hidden_units',
     print(f"Complexity parameter: {complexity_param}")
     print(f"Numero totale run: {len(all_results)}")
     
-    # ========================================
     # RAGGRUPPA RISULTATI PER COMPLESSITÀ
-    # ========================================
     complexity_groups = defaultdict(lambda: {'train': [], 'test': [], 'val': []})
     
     for result in all_results:
         # Determina la complessità
         if complexity_param == 'hidden_units': 
-            complexity = result. get('hidden_units', result['params']['network_structure'][1])
+            complexity = result.get('hidden_units', result['params']['network_structure'][1])
         elif complexity_param == 'epochs':
             if 'history' in result and isinstance(result['history'], dict):
-                complexity = len(result['history']. get('training', [100]))
+                complexity = len(result['history'].get('training', [100]))
             else:
                 complexity = 100
         elif complexity_param == 'lr': 
             complexity = result['lr']
         else:
-            complexity = result. get(complexity_param, 0)
+            complexity = result.get(complexity_param, 0)
         
         # Determina training e test error
         if 'train_mee' in result:  # CUP (regressione)
@@ -462,14 +445,10 @@ def plot_bias_variance_tradeoff(all_results, complexity_param='hidden_units',
     print(f"Complessità trovate: {complexities}")
     print(f"Run per complessità: {[len(complexity_groups[c]['train']) for c in complexities]}")
     
-    # ========================================
     # PLOT
-    # ========================================
     fig, ax = plt.subplots(figsize=(11, 7))
     
-    # ========================================
     # PLOT LINEE SOTTILI (ogni singolo run)
-    # ========================================
     max_runs = max(len(complexity_groups[c]['train']) for c in complexities)
     
     print(f"\nPlotting {max_runs} run individuali...")
@@ -482,7 +461,7 @@ def plot_bias_variance_tradeoff(all_results, complexity_param='hidden_units',
         for complexity in complexities:
             if run_idx < len(complexity_groups[complexity]['train']):
                 x_path.append(complexity)
-                train_path. append(complexity_groups[complexity]['train'][run_idx])
+                train_path.append(complexity_groups[complexity]['train'][run_idx])
                 
                 if complexity_groups[complexity]['test'] and \
                    run_idx < len(complexity_groups[complexity]['test']):
@@ -512,9 +491,9 @@ def plot_bias_variance_tradeoff(all_results, complexity_param='hidden_units',
         
         if complexity_groups[complexity]['test']:
             test_means.append(np.mean(complexity_groups[complexity]['test']))
-            test_stds. append(np.std(complexity_groups[complexity]['test']))
+            test_stds.append(np.std(complexity_groups[complexity]['test']))
         else:
-            test_means. append(np.nan)
+            test_means.append(np.nan)
             test_stds.append(np.nan)
     
     # Linea spessa BLU (training mean)
@@ -529,11 +508,9 @@ def plot_bias_variance_tradeoff(all_results, complexity_param='hidden_units',
         ax.plot(test_c, test_m, color='#CB4335', linewidth=4, 
                label='Test Error (mean)', zorder=10)
     
-    # ========================================
     # ANNOTAZIONI
-    # ========================================
     all_errors = train_means + [m for m in test_means if not np.isnan(m)]
-    y_max = max(all_errors) if all_errors else 1. 0
+    y_max = max(all_errors) if all_errors else 1.0
     y_min = min(all_errors) if all_errors else 0.0
     y_range = y_max - y_min if y_max > y_min else 1.0
     
@@ -573,9 +550,7 @@ def plot_bias_variance_tradeoff(all_results, complexity_param='hidden_units',
         ax.scatter([optimal_complexity], [optimal_error], color='green', 
                   s=200, marker='*', zorder=11, edgecolors='black', linewidths=2)
     
-    # ========================================
     # FORMATTING
-    # ========================================
     xlabel_map = {
         'hidden_units': 'Model Complexity (Hidden Units)',
         'epochs': 'Model Complexity (Training Epochs)',
@@ -662,7 +637,7 @@ if __name__ == "__main__":
         print(f"    - Output Layer:       {params['network_structure'][-1]} neurons")
         
         print(f"\n TRAINING:")
-        print(f"  Algorithm:           {params['algorithm']. upper()}")
+        print(f"  Algorithm:           {params['algorithm'].upper()}")
         print(f"  Learning Rate:       {params['eta']}")
         print(f"  Momentum:            {params['momentum']}")
         print(f"  Batch Size:          32")
@@ -733,6 +708,6 @@ if __name__ == "__main__":
         print(f"{'='*70}\n")
         
     except Exception as e:
-        print(f"\n❌ ERRORE: {e}")
+        print(f"\n ERRORE: {e}")
         import traceback
-        traceback. print_exc()
+        traceback.print_exc()

@@ -233,6 +233,59 @@ class NeuralNetwork:
             squared_loss = 0.5 * (error ** 2)
             linear_loss = delta * (np.abs(error) - 0.5 * delta)
             return np.where(is_small_error, squared_loss, linear_loss)
+        elif loss_type == "binary_crossentropy":
+            # Clipping per evitare log(0) che darebbe -inf
+            epsilon = 1e-15
+            y_pred_clipped = np.clip(y_pred, epsilon, 1 - epsilon)
+            # Formula:  -[y*log(p) + (1-y)*log(1-p)]
+            bce = - (y_true * np.log(y_pred_clipped) + (1 - y_true) * np.log(1 - y_pred_clipped))
+            return bce
+        elif loss_type == "mse":
+            return error ** 2
+        elif loss_type == "mee":
+            return np.sqrt(np.sum(error ** 2))
+        else:
+            raise ValueError(f"Loss type '{loss_type}' not implemented.")
+    def derivative_loss(self, y_true, y_pred, loss_type):
+        """
+        Calcola la derivata della loss rispetto a y_pred in base al tipo di loss specificato
+        """
+        # Converti in array numpy se necessario
+        y_true = np.asarray(y_true).flatten()
+        y_pred = np.asarray(y_pred).flatten()
+        
+        error = y_pred - y_true
+        
+        if loss_type == "half_mse":
+            return error
+        
+        elif loss_type == "mae":
+            return np.sign(error)
+        
+        elif loss_type == "log_cosh":
+            return np.tanh(error)
+        
+        elif loss_type == "binary_crossentropy":
+            # Clipping per evitare log(0) che darebbe -inf
+            epsilon = 1e-15
+            y_pred_clipped = np. clip(y_pred, epsilon, 1 - epsilon)
+    
+            # Formula:  -[y*log(p) + (1-y)*log(1-p)]
+            # Derivata rispetto a y_pred:  (y_pred - y_true) / (y_pred * (1 - y_pred))
+            derivative = (y_pred_clipped - y_true) / (y_pred_clipped * (1 - y_pred_clipped))
+            return derivative
+        
+        elif loss_type == "huber":
+            delta = 1.0 # Deve coincidere con quello usato in compute_loss
+            is_small_error = np.abs(error) <= delta
+            return np.where(is_small_error, error, delta * np.sign(error)) # Se l'errore è piccolo si comporta come MSE (error), altrimenti come MAE (delta * sign(error))
+        elif loss_type == "mse":
+            return 2 * error    
+        elif loss_type == "mee":
+            norm = np.sqrt(np.sum(error ** 2))
+            if norm == 0:
+                return np.zeros_like(error)
+            return error / norm
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
     
