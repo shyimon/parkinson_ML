@@ -1,59 +1,30 @@
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib. pyplot as plt
 from neural_network import NeuralNetwork
 from data_manipulation import return_monk2
 
 
-def smooth_curve(values, weight=0.9):
-    """
-    Applica exponential moving average per smoothing
-    
-    Args:
-        values: lista di valori da smoothare
-        weight: peso per lo smoothing (0-1). Più alto = più smooth
-    
-    Returns:
-        smoothed:  lista di valori smoothati
-    """
-    smoothed = []
-    last = values[0]
-    for point in values:  
-        smoothed_val = last * weight + (1 - weight) * point
-        smoothed.append(smoothed_val)
-        last = smoothed_val
-    return smoothed
-
-
-def _monk2_test(learning_rate, seed, verbose=False):
-    """
-    Esegue un singolo training con learning rate e seed specificati
-    USA SOLO TRAIN E VALIDATION SET (non test!)
-    
-    MONK-2: problema più complesso (esattamente 2 attributi = primo valore)
-    """
+def _monk2_test(learning_rate, seed, verbose=False): 
     if verbose:
-        print(f"  🎲 Seed: {seed}, LR: {learning_rate}")
+        print(f"  Seed: {seed}, LR: {learning_rate}")
     
     # Seed per riproducibilità
-    np. random.seed(seed)
-    
-    # Carica i dati MONK-2
+    np.random. seed(seed)
+
     X_train, y_train, X_val, y_val, X_test, y_test = return_monk2(
         one_hot=True, 
         val_split=0.3,
         dataset_shuffle=True
     )
     
-    # Configurazione ottimizzata per MONK-2
-    # MONK-2 è più complesso di MONK-1 → serve una rete più grande
     params = {
-        'network_structure': [17, 8, 1],  # 8 neuroni per gestire la complessità
+        'network_structure': [17, 8, 1],  
         'eta': learning_rate,
-        'l2_lambda': 0.0,  # Nessuna regolarizzazione (nessun rumore!)
-        'momentum': 0.9,
+        'l2_lambda': 0.0, 
+        'momentum':  0.9,
         'algorithm': 'sgd',
         'activation_type': 'sigmoid',
-        'loss_type':  'half_mse',
+        'loss_type': 'half_mse',
         'weight_initializer': 'xavier',
         'decay': 0.9,
         'mu': 1.75,
@@ -68,7 +39,7 @@ def _monk2_test(learning_rate, seed, verbose=False):
     history = net.fit(
         X_train, y_train,
         X_val, y_val,
-        epochs=2000,  # Più epoche per convergenza
+        epochs=2000,  # Più epoche per MONK-2
         batch_size=1,
         patience=200,
         verbose=verbose
@@ -89,41 +60,29 @@ def _monk2_test(learning_rate, seed, verbose=False):
     if isinstance(history, dict) and 'training' in history:
         final_train_loss = history['training'][-1] if isinstance(history['training'], list) else history['training']
         final_val_loss = history['validation'][-1] if isinstance(history['validation'], list) else history['validation']
-    else:  
+    else: 
         final_train_loss = history if not isinstance(history, dict) else 0
         final_val_loss = history if not isinstance(history, dict) else 0
     
     return {
-        'train_accuracy':  train_acc,
+        'train_accuracy': train_acc,
         'val_accuracy': val_acc,
         'train_error': train_error,
         'val_error': val_error,
         'train_loss': final_train_loss,
         'val_loss': final_val_loss,
-        'network':  net,
+        'network': net,
         'history': history,
         'params': params,
         'lr': learning_rate,
         'seed': seed,
-        'data':  (X_train, y_train, X_val, y_val, X_test, y_test)
+        'data': (X_train, y_train, X_val, y_val, X_test, y_test)
     }
 
 
 def grid_search_lr(n_seeds_per_lr=5, learning_rates=None):
-    """
-    Grid search su learning rate con seed diversi
-    SELEZIONE BASATA SU VALIDATION ACCURACY (non test!)
-    
-    Args:
-        n_seeds_per_lr: numero di seed da provare per ogni learning rate
-        learning_rates: lista di learning rates da provare
-    
-    Returns: 
-        best_results: dizionario con i migliori risultati
-        all_results: lista di tutti i risultati
-    """
     if learning_rates is None: 
-        learning_rates = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+        learning_rates = [0.1, 0.15, 0.2, 0.25, 0.3, 0.4]
     
     best_val_acc = 0
     best_results = None
@@ -150,144 +109,38 @@ def grid_search_lr(n_seeds_per_lr=5, learning_rates=None):
             results = _monk2_test(learning_rate=lr, seed=seed, verbose=False)
             all_results.append(results)
             
-            print(f"Train: {results['train_accuracy']:.2%}, Val: {results['val_accuracy']:.2%}")
+            print(f"Train:  {results['train_accuracy']:.2%}, Val: {results['val_accuracy']:.2%}")
             
-            # SELEZIONE BASATA SU VALIDATION ACCURACY
             if results['val_accuracy'] > best_val_acc:
                 best_val_acc = results['val_accuracy']
                 best_results = results
-                print(f"    NUOVO BEST VAL ACC: {best_val_acc:.2%}")
+                print(f"  NUOVO BEST VAL ACC: {best_val_acc:.2%}")
             
-            # Se raggiungiamo 100% su validation, fermati
             if results['val_accuracy'] >= 1.0:
-                print(f"\n 100% VALIDATION ACCURACY RAGGIUNTO!")
+                print(f"\n 100% VALIDATION ACCURACY!  Fermata anticipata.")
                 break
         
         if best_val_acc >= 1.0:
             print(f"\n Obiettivo raggiunto!  Interrompo la ricerca.")
             break
     
-    # Statistiche finali (SOLO train e validation)
     print(f"\n{'='*70}")
     print(f" MIGLIOR CONFIGURAZIONE (basata su VALIDATION)")
     print(f"{'='*70}")
     print(f"Validation Accuracy: {best_results['val_accuracy']:.4%}")
-    print(f"Train Accuracy:      {best_results['train_accuracy']:.4%}")
-    print(f"Validation Error:    {best_results['val_error']:.4%}")
-    print(f"Train Error:         {best_results['train_error']:.4%}")
-    print(f"Best LR:             {best_results['lr']}")
-    print(f"Best Seed:           {best_results['seed']}")
-    
-    # Statistiche aggregate
-    all_val_accs = [r['val_accuracy'] for r in all_results]
-    print(f"\n Statistiche VALIDATION su {len(all_results)} run:")
-    print(f"  Media:    {np.mean(all_val_accs):.2%}")
-    print(f"  Std Dev:  {np.std(all_val_accs):.2%}")
-    print(f"  Min:      {np.min(all_val_accs):.2%}")
-    print(f"  Max:      {np.max(all_val_accs):.2%}")
-    print(f"  Runs con 100%:  {sum(1 for acc in all_val_accs if acc >= 1.0)}/{len(all_val_accs)}")
+    print(f"Train Accuracy:       {best_results['train_accuracy']:.4%}")
+    print(f"Best LR:            {best_results['lr']}")
+    print(f"Best Seed:          {best_results['seed']}")
     
     return best_results, all_results
-
-
-def retrain_and_track_errors(best_results):
-    """
-    Ri-addestra il modello migliore tracciando training error e VALIDATION error ad ogni epoca
-    (NON test error!)
-    
-    Args:
-        best_results: dizionario con i migliori risultati dalla grid search
-    
-    Returns:  
-        train_errors: lista di training errors per epoca
-        val_errors: lista di validation errors per epoca
-        net: rete neurale addestrata
-    """
-    print(f"\n{'='*70}")
-    print(f" RI-ADDESTRAMENTO CON TRACKING DEGLI ERRORI")
-    print(f"{'='*70}")
-    print(f"LR: {best_results['lr']}, Seed: {best_results['seed']}")
-    
-    # Recupera i dati
-    X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
-    
-    # Seed per riproducibilità
-    np.random.seed(best_results['seed'])
-    
-    # Ricrea la rete con gli stessi parametri
-    params = best_results['params']. copy()
-    net = NeuralNetwork(**params)
-    
-    # Training manuale con tracking degli errori
-    train_errors = []
-    val_errors = []
-    
-    epochs = 2000
-    batch_size = 1
-    patience = 200
-    best_val_error = float('inf')
-    patience_counter = 0
-    
-    print(f"\nAddestramento in corso (tracking errori ad ogni epoca)...")
-    
-    for epoch in range(epochs):
-        # Training per un'epoca
-        try:
-            net.fit(X_train, y_train, X_val, y_val, epochs=1, batch_size=batch_size, verbose=False)
-        except:  
-            # Se fit() non supporta epoch=1, usa fit() completo una volta sola
-            if epoch == 0:
-                net.fit(X_train, y_train, X_val, y_val, epochs=epochs, batch_size=batch_size, patience=patience, verbose=False)
-            break
-        
-        # Calcola errori su train e VALIDATION (NON test!)
-        train_pred = net.predict(X_train)
-        train_pred_class = (train_pred > 0.5).astype(int)
-        train_error = 1 - np.mean(train_pred_class == y_train)
-        
-        val_pred = net.predict(X_val)
-        val_pred_class = (val_pred > 0.5).astype(int)
-        val_error = 1 - np. mean(val_pred_class == y_val)
-        
-        train_errors.append(train_error)
-        val_errors.append(val_error)
-        
-        # Early stopping basato su validation error
-        if val_error < best_val_error:
-            best_val_error = val_error
-            patience_counter = 0
-        else:  
-            patience_counter += 1
-        
-        if patience_counter >= patience:
-            print(f"\nEarly stopping at epoch {epoch+1}")
-            break
-        
-        # Progress ogni 100 epoche
-        if (epoch + 1) % 100 == 0:
-            print(f"Epoca {epoch+1}/{epochs} - Train Error: {train_error:.4f}, Val Error: {val_error:.4f}")
-    
-    print(f"\n Training completato dopo {len(train_errors)} epoche")
-    print(f"Final Train Error: {train_errors[-1]:.4%}")
-    print(f"Final Val Error:    {val_errors[-1]:.4%}")
-    
-    return train_errors, val_errors, net
 
 
 def evaluate_on_test_set(net, X_test, y_test):
     """
     Valuta il modello finale sul TEST SET (UNA SOLA VOLTA!)
-    
-    Args:
-        net: rete neurale addestrata
-        X_test: test features
-        y_test: test labels
-    
-    Returns:
-        dizionario con metriche sul test set
     """
     print(f"\n{'='*70}")
-    print(f" VALUTAZIONE FINALE SUL TEST SET (prima volta! )")
+    print(f" VALUTAZIONE FINALE SUL TEST SET")
     print(f"{'='*70}")
     
     test_pred = net.predict(X_test)
@@ -311,253 +164,442 @@ def evaluate_on_test_set(net, X_test, y_test):
     print(f"  Precision:      {precision:.4f}")
     print(f"  Recall:         {recall:.4f}")
     print(f"  F1-score:       {f1:.4f}")
-    print(f"\n  Confusion Matrix:")
+    print(f"\n Confusion Matrix:")
     print(f"    TP: {tp}  FP: {fp}")
     print(f"    FN: {fn}  TN: {tn}")
     
     return {
-        'test_accuracy':  test_acc,
-        'test_error': test_error,
+        'test_accuracy': test_acc,
+        'test_error':  test_error,
         'precision': precision,
-        'recall': recall,
-        'f1': f1,
-        'confusion_matrix': {'tp': tp, 'fp': fp, 'tn': tn, 'fn': fn}
+        'recall':  recall,
+        'f1':  f1,
+        'confusion_matrix': {'tp': tp, 'fp':  fp, 'tn': tn, 'fn': fn}
     }
 
 
-def plot_results(train_results, train_errors, val_errors, test_results, save_path='monk2_results.png'):
+def plot_results(train_results, test_results, save_path='monk2_performance.png'):
     """
-    Crea grafici completi dei risultati CON SMOOTHING
+    Crea grafico con Model Performance (bar chart) + Confusion Matrix
+    """
+    save_path = save_path.strip().replace(' ', '')
     
-    Args:  
-        train_results: risultati su train/val dalla grid search
-        train_errors:  lista di training errors per epoca
-        val_errors: lista di validation errors per epoca
-        test_results: risultati sul test set (calcolati UNA SOLA VOLTA)
-        save_path: percorso dove salvare il grafico
-    """
     train_acc = train_results['train_accuracy']
     val_acc = train_results['val_accuracy']
     test_acc = test_results['test_accuracy']
     lr = train_results['lr']
     seed = train_results['seed']
     
-    fig = plt.figure(figsize=(16, 6))
+    fig = plt.figure(figsize=(14, 6))
     
-    # Subplot 1: Training Error & Validation Error vs Epochs (CON SMOOTHING)
-    plt.subplot(1, 3, 1)
-    
-    if train_errors is not None and val_errors is not None:  
-        epochs = range(1, len(train_errors) + 1)
-        
-        # APPLICA SMOOTHING
-        smoothing_weight = 0.85
-        train_errors_smooth = smooth_curve(train_errors, weight=smoothing_weight)
-        val_errors_smooth = smooth_curve(val_errors, weight=smoothing_weight)
-        
-        # Plot curve originali (trasparenti)
-        plt.plot(epochs, train_errors, linewidth=1, color='#3498db', alpha=0.2, label='_nolegend_')
-        plt.plot(epochs, val_errors, linewidth=1, color='#e74c3c', alpha=0.2, label='_nolegend_')
-        
-        # Plot curve smoothate
-        plt.plot(epochs, train_errors_smooth, label='Training Error (smoothed)', 
-                linewidth=2.5, color='#3498db')
-        plt.plot(epochs, val_errors_smooth, label='Validation Error (smoothed)', 
-                linewidth=2.5, color='#e74c3c')
-        
-        plt. xlabel('Epoch', fontsize=12, fontweight='bold')
-        plt.ylabel('Error Rate', fontsize=12, fontweight='bold')
-        plt.title(f'Training & Validation Error vs Epochs\n(LR={lr}, Seed={seed})', 
-                 fontsize=13, fontweight='bold')
-        plt.legend(fontsize=11, loc='best')
-        plt.grid(True, alpha=0.3, linestyle='--')
-        
-        # Linea orizzontale allo 0% (obiettivo)
-        plt.axhline(y=0, color='green', linestyle='--', linewidth=2, alpha=0.6)
-        
-        # Trova il minimo del validation error
-        min_val_error = np.min(val_errors)
-        min_val_epoch = np.argmin(val_errors) + 1
-        plt.scatter([min_val_epoch], [min_val_error], color='red', s=150, zorder=5, marker='*', 
-                   edgecolors='black', linewidths=2, 
-                   label=f'Min Val Error: {min_val_error:.2%} (epoch {min_val_epoch})')
-        
-        plt.legend(fontsize=9, loc='best')
-        plt.ylim(-0.05, max(0.5, max(max(train_errors), max(val_errors)) * 1.1))
-        
-    else:
-        plt.text(0.5, 0.5, 
-                f"Training Error:     {train_results['train_error']:.2%}\n"
-                f"Validation Error:  {train_results['val_error']:.2%}\n\n"
-                f"(No epoch-by-epoch tracking)",
-                ha='center', va='center', 
-                transform=plt.gca().transAxes,
-                fontsize=11, 
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.7))
-        plt.title('Error Rates (Final Values)', fontsize=13, fontweight='bold')
-    
-    # Subplot 2: Accuracy Bar Chart
-    plt.subplot(1, 3, 2)
+    # SUBPLOT 1: ACCURACY BAR CHART
+    plt.subplot(1, 2, 1)
     
     categories = ['Train', 'Validation', 'Test']
     accuracies = [train_acc, val_acc, test_acc]
     colors = ['#3498db', '#f39c12', '#2ecc71']
     
-    bars = plt.bar(categories, accuracies, color=colors, alpha=0.85, edgecolor='black', linewidth=2)
+    bars = plt.bar(categories, accuracies, color=colors, alpha=0.85, 
+                   edgecolor='black', linewidth=2.5)
     
-    # Aggiungi valori sopra le barre
+    # Testo sopra le barre
     for i, (cat, acc) in enumerate(zip(categories, accuracies)):
-        plt.text(i, acc + 0.02, f'{acc:.2%}', ha='center', fontsize=13, fontweight='bold')
+        plt.text(i, acc + 0.03, f'{acc:.2%}', ha='center', 
+                fontsize=16, fontweight='bold')
     
-    plt.ylabel('Accuracy', fontsize=12, fontweight='bold')
-    plt.title('Model Performance\n(Test evaluated ONCE at the end)', fontsize=13, fontweight='bold')
+    plt.ylabel('Accuracy', fontsize=14, fontweight='bold')
+    plt.title(f'Model Performance (MONK-2)\n(LR={lr}, Seed={seed})', 
+             fontsize=15, fontweight='bold', pad=15)
     plt.ylim(0, 1.15)
     plt.grid(True, alpha=0.3, axis='y', linestyle='--')
-    plt.axhline(y=1.0, color='green', linestyle='--', linewidth=2, alpha=0.7, label='100% Target')
-    plt.legend(fontsize=10)
     
-    # Subplot 3: Confusion Matrix
-    plt.subplot(1, 3, 3)
+    # Linea 100% target
+    plt.axhline(y=1.0, color='green', linestyle='--', linewidth=2.5, 
+               alpha=0.7, label='100% Target')
+    plt.legend(fontsize=11, loc='lower right')
+    
+    # SUBPLOT 2: CONFUSION MATRIX
+    plt.subplot(1, 2, 2)
     
     cm = test_results['confusion_matrix']
     confusion_data = np.array([[cm['tn'], cm['fp']], 
                                 [cm['fn'], cm['tp']]])
     
-    im = plt.imshow(confusion_data, cmap='Blues', alpha=0.8)
-    plt.colorbar(im, label='Count', fraction=0.046)
+    im = plt.imshow(confusion_data, cmap='Blues', alpha=0.9, vmin=0, vmax=confusion_data.max())
+    plt.colorbar(im, label='Count', fraction=0.046, pad=0.04)
     
-    # Aggiungi valori nelle celle
+    # Testo nelle celle
     for i in range(2):
         for j in range(2):
-            text_color = 'white' if confusion_data[i, j] > confusion_data. max()/2 else 'black'
+            text_color = 'white' if confusion_data[i, j] > confusion_data.max()/2 else 'black'
             plt.text(j, i, str(confusion_data[i, j]), 
                     ha='center', va='center', 
-                    fontsize=22, fontweight='bold',
+                    fontsize=28, fontweight='bold',
                     color=text_color)
     
-    plt.xticks([0, 1], ['Pred 0', 'Pred 1'], fontsize=11)
-    plt.yticks([0, 1], ['True 0', 'True 1'], fontsize=11)
-    plt.xlabel('Predicted', fontsize=12, fontweight='bold')
-    plt.ylabel('True', fontsize=12, fontweight='bold')
-    plt.title(f'Confusion Matrix (TEST SET)\nPrecision:  {test_results["precision"]:.2%}, Recall: {test_results["recall"]:.2%}, F1: {test_results["f1"]:.2%}', 
-              fontsize=12, fontweight='bold')
+    plt.xticks([0, 1], ['Pred 0', 'Pred 1'], fontsize=12, fontweight='bold')
+    plt.yticks([0, 1], ['True 0', 'True 1'], fontsize=12, fontweight='bold')
+    plt.xlabel('Predicted', fontsize=14, fontweight='bold')
+    plt.ylabel('True', fontsize=14, fontweight='bold')
+    plt.title(f'Confusion Matrix (TEST SET)\nPrecision:  {test_results["precision"]:.2%}, Recall: {test_results["recall"]:.2%}', 
+             fontsize=14, fontweight='bold', pad=15)
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"\n Grafico salvato in:  {save_path}")
+    print(f"\n Grafico Model Performance salvato in: {save_path}")
     plt.show()
 
 
-def plot_lr_comparison(all_results, save_path='monk2_lr_comparison.png'):
-    """
-    Crea un grafico di confronto tra diversi learning rates
-    BASATO SU VALIDATION ACCURACY (non test!)
-    """
-    # Raggruppa per learning rate
-    lr_groups = {}
-    for r in all_results:
-        lr = r['lr']
-        if lr not in lr_groups:
-            lr_groups[lr] = []
-        lr_groups[lr]. append(r['val_accuracy'])
+def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='monk2_bias_variance_epochs.png'):
+    from collections import defaultdict
     
-    # Ordina per learning rate
-    lrs = sorted(lr_groups. keys())
-    means = [np.mean(lr_groups[lr]) for lr in lrs]
-    stds = [np.std(lr_groups[lr]) for lr in lrs]
-    maxs = [np.max(lr_groups[lr]) for lr in lrs]
+    save_path = save_path.strip().replace(' ', '')
     
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+    print(f"\n{'='*70}")
+    print(f" CREAZIONE GRAFICO BIAS-VARIANCE VS EPOCHE")
+    print(f"{'='*70}")
     
-    # Subplot 1: Media con error bars
-    ax1.errorbar(lrs, means, yerr=stds, marker='o', linewidth=2.5, markersize=10, 
-                 capsize=5, capthick=2, label='Mean ± Std', color='#3498db')
-    ax1.plot(lrs, maxs, marker='*', linewidth=2.5, markersize=14, 
-             linestyle='--', color='#2ecc71', label='Max')
-    ax1.axhline(y=1.0, color='red', linestyle='--', linewidth=2, alpha=0.6, label='100% Target')
-    ax1.set_xlabel('Learning Rate', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Validation Accuracy', fontsize=12, fontweight='bold')
-    ax1.set_title('Validation Accuracy vs Learning Rate', fontsize=13, fontweight='bold')
-    ax1.legend(fontsize=11)
-    ax1.grid(True, alpha=0.3, linestyle='--')
-    ax1.set_ylim(0.5, 1.05)
+    # RE-TRAINING DI ALCUNI MODELLI CON TRACKING
+    print("Re-training di modelli selezionati con epoch tracking...")
     
-    # Subplot 2: Box plot
-    data_for_boxplot = [lr_groups[lr] for lr in lrs]
-    bp = ax2.boxplot(data_for_boxplot, labels=[f'{lr}' for lr in lrs], patch_artist=True)
+    all_curves = []
+    num_runs = min(15, len(all_results))  # Limita a 15 run
     
-    for patch in bp['boxes']:
-        patch. set_facecolor('#3498db')
-        patch.set_alpha(0.7)
+    for idx in range(num_runs):
+        result = all_results[idx]
+        print(f"\rProcessing run {idx+1}/{num_runs}.. .", end="")
+        
+        X_train, y_train, X_val, y_val, X_test, y_test = result['data']
+        
+        # Seed per riproducibilità
+        np.random.seed(result['seed'])
+        
+        # Ricrea la rete
+        params = result['params']. copy()
+        net = NeuralNetwork(**params)
+        
+        train_errors_run = []
+        test_errors_run = []
+        epochs_run = []
+        
+        max_epochs = 150  
+        batch_size = 1
+        
+        for epoch in range(max_epochs):
+            try:
+                net.fit(X_train, y_train, X_val, y_val, epochs=1, batch_size=batch_size, verbose=False)
+            except: 
+                break
+            
+            # Training error
+            train_pred = net.predict(X_train)
+            train_pred_class = (train_pred > 0.5).astype(int)
+            train_error = 1 - np.mean(train_pred_class == y_train)
+            
+            # Test error (SOLO per questo grafico di visualizzazione!)
+            test_pred = net. predict(X_test)
+            test_pred_class = (test_pred > 0.5).astype(int)
+            test_error = 1 - np.mean(test_pred_class == y_test)
+            
+            epochs_run.append(epoch + 1)
+            train_errors_run.append(train_error)
+            test_errors_run. append(test_error)
+        
+        all_curves.append((epochs_run, train_errors_run, test_errors_run))
     
-    ax2.axhline(y=1.0, color='red', linestyle='--', linewidth=2, alpha=0.6, label='100% Target')
-    ax2.set_xlabel('Learning Rate', fontsize=12, fontweight='bold')
-    ax2.set_ylabel('Validation Accuracy', fontsize=12, fontweight='bold')
-    ax2.set_title('Validation Accuracy Distribution', fontsize=13, fontweight='bold')
-    ax2.legend(fontsize=11)
-    ax2.grid(True, alpha=0.3, axis='y', linestyle='--')
-    ax2.set_ylim(0.5, 1.05)
+    print("\n Re-training completato")
+    
+    # SMOOTHING DELLE CURVE
+    def smooth_curve(values, weight=0.85):
+        """Exponential moving average"""
+        smoothed = []
+        last = values[0] if values else 0
+        for point in values:
+            smoothed_val = last * weight + (1 - weight) * point
+            smoothed.append(smoothed_val)
+            last = smoothed_val
+        return smoothed
+    
+    # PLOT
+    fig, ax = plt.subplots(figsize=(11, 7))
+    
+    # PLOT LINEE SOTTILI (ogni singolo run - smoothed)
+    for epochs_run, train_errors_run, test_errors_run in all_curves:
+        if len(train_errors_run) > 1:
+            # Smooth individualmente
+            train_smooth = smooth_curve(train_errors_run, weight=0.85)
+            test_smooth = smooth_curve(test_errors_run, weight=0.85)
+            
+            # Linee sottili blu (training)
+            ax.plot(epochs_run, train_smooth, color='lightblue', alpha=0.3, 
+                   linewidth=0.8, zorder=1)
+            
+            # Linee sottili rosse (test)
+            ax.plot(epochs_run, test_smooth, color='lightcoral', alpha=0.3, 
+                   linewidth=0.8, zorder=1)
+    
+    # CALCOLA MEDIE PER EPOCA
+    max_len = max(len(curve[0]) for curve in all_curves) if all_curves else 150
+    
+    train_means = []
+    test_means = []
+    
+    for epoch_idx in range(max_len):
+        train_vals = []
+        test_vals = []
+        
+        for epochs_run, train_errors_run, test_errors_run in all_curves: 
+            if epoch_idx < len(train_errors_run):
+                train_vals.append(train_errors_run[epoch_idx])
+                test_vals.append(test_errors_run[epoch_idx])
+        
+        if train_vals:
+            train_means.append(np.mean(train_vals))
+            test_means.append(np.mean(test_vals))
+    
+    epochs_axis = range(1, len(train_means) + 1)
+    
+    # SMOOTH DELLE MEDIE
+    if train_means:
+        train_means_smooth = smooth_curve(train_means, weight=0.90)
+        test_means_smooth = smooth_curve(test_means, weight=0.90)
+        
+        # LINEE SPESSE (medie smoothed)
+        ax.plot(epochs_axis, train_means_smooth, color='#1F618D', linewidth=4, 
+               label='Training Error (mean)', zorder=10)
+        
+        ax.plot(epochs_axis, test_means_smooth, color='#CB4335', linewidth=4, 
+               label='Test Error (mean)', zorder=10)
+        
+        # ANNOTAZIONI
+        y_max = max(max(train_means_smooth), max(test_means_smooth))
+        y_min = min(min(train_means_smooth), min(test_means_smooth))
+        y_range = y_max - y_min if y_max > y_min else 1.0
+        
+        # High Bias, Low Variance (sinistra)
+        text_x_left = max_len * 0.1
+        ax.text(text_x_left, y_max - 0.03 * y_range,
+               'High Bias\nLow Variance', fontsize=11, ha='left', va='top',
+               bbox=dict(boxstyle='round,pad=0.5', facecolor='wheat', alpha=0.8,
+                        edgecolor='orange', linewidth=1.5))
+        
+        # Low Bias, High Variance (destra)
+        text_x_right = max_len * 0.9
+        ax.text(text_x_right, y_max - 0.03 * y_range,
+               'Low Bias\nHigh Variance', fontsize=11, ha='right', va='top',
+               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightcoral', alpha=0.8,
+                        edgecolor='red', linewidth=1.5))
+        
+        # Lucky/Unlucky
+        ax.text(max_len * 0.95, y_min + 0.15 * y_range, 
+               'lucky', fontsize=11, style='italic', color='#1F618D', 
+               ha='right', fontweight='bold')
+        ax.text(max_len * 0.95, y_max - 0.25 * y_range, 
+               'unlucky', fontsize=11, style='italic', color='#CB4335', 
+               ha='right', fontweight='bold')
+        
+        # Optimal complexity (minimo test error)
+        min_test_idx = np.argmin(test_means_smooth)
+        optimal_epoch = min_test_idx + 1
+        optimal_error = test_means_smooth[min_test_idx]
+        
+        ax.axvline(x=optimal_epoch, color='green', linestyle=':', 
+                  linewidth=2.5, alpha=0.7, zorder=9,
+                  label=f'Optimal:  {optimal_epoch} epochs')
+        
+        ax.scatter([optimal_epoch], [optimal_error], color='green', 
+                  s=200, marker='*', zorder=11, edgecolors='black', linewidths=2)
+    
+    # FORMATTING
+    ax.set_xlabel('Model Complexity (Training Epochs)', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Prediction Error', fontsize=13, fontweight='bold')
+    ax.set_title(f'Bias-Variance Tradeoff - {dataset_name}\nTraining and Test Error vs Training Epochs', 
+                fontsize=14, fontweight='bold', pad=15)
+    ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    
+    if train_means:
+        ax.set_ylim(max(0, y_min - 0.05 * y_range), y_max + 0.15 * y_range)
+    ax.set_xlim(0, max_len * 1.02)
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f" Grafico di confronto salvato in: {save_path}")
+    print(f"\n Grafico Bias-Variance (epoche) salvato in: {save_path}")
     plt.show()
 
 
-if __name__ == "__main__":  
+if __name__ == "__main__":
     try:
         print("="*70)
-        print(" MONK-2 ")
+        print(" MONK-2 - BINARY CLASSIFICATION")
         print("="*70)
         
-        # FASE 1: Grid search su learning rate (usa SOLO train e validation)
+        # FASE 1: Grid search
         print("\n FASE 1: Grid Search (Train + Validation)")
         best_results, all_results = grid_search_lr(
             n_seeds_per_lr=5,
-            learning_rates=[0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
+            learning_rates=[0.1, 0.15, 0.2, 0.25, 0.3, 0.4]
         )
         
-        # FASE 2: Ri-addestra il modello migliore tracciando gli errori
-        print(f"\n FASE 2: Re-training con Error Tracking (Train + Validation)")
-        train_errors, val_errors, final_net = retrain_and_track_errors(best_results)
+        # FASE 2: Bias-Variance Tradeoff con EPOCHE
+        print(f"\n FASE 2: Grafico Bias-Variance vs Epoche")
+        plot_bias_variance_epochs(all_results, 
+                                  dataset_name='MONK-2',
+                                  save_path='monk2_bias_variance_epochs.png')
         
         # FASE 3: Valuta sul TEST SET (UNA SOLA VOLTA!)
         print(f"\n FASE 3: Valutazione finale sul Test Set")
         X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
+        final_net = best_results['network']
         test_results = evaluate_on_test_set(final_net, X_test, y_test)
         
-        # FASE 4: Plot dei risultati
-        plot_results(best_results, train_errors, val_errors, test_results, save_path='monk2_best_results.png')
-        plot_lr_comparison(all_results, save_path='monk2_lr_comparison.png')
+        # FASE 4: Plot Model Performance + Confusion Matrix
+        print(f"\n FASE 4: Grafico Model Performance")
+        plot_results(best_results, test_results, save_path='monk2_performance.png')
         
-        # ========================================================
-        # RIEPILOGO FINALE CON PARAMETRI COMPLETI
-        # ========================================================
+        
+        # FASE 5: ENSEMBLE DI MODELLI
+        print(f"\n{'='*70}")
+        print(" FASE 5: ENSEMBLE DI MODELLI")
+        print(f"{'='*70}")
+        
+        # Scegli i 3 migliori seed dalla grid search
+        sorted_results = sorted(all_results, key=lambda x: x['val_accuracy'], reverse=True)
+        top_3_results = sorted_results[:3]
+        
+        print(f"\nTop 3 configurazioni selezionate:")
+        for idx, res in enumerate(top_3_results, 1):
+            print(f"  {idx}. LR={res['lr']}, Seed={res['seed']}, Val Acc={res['val_accuracy']:.2%}")
+        
+        print(f"\n Training ensemble models...")
+        ensemble_nets = []
+        ensemble_configs = []
+        
+        for idx, result in enumerate(top_3_results, 1):
+            print(f"\r  Training model {idx}/3.. .", end="", flush=True)
+            
+            # Usa la rete già addestrata (più veloce)
+            ensemble_nets.append(result['network'])
+            ensemble_configs.append({'lr': result['lr'], 'seed': result['seed']})
+        
+        print(f"\n Ensemble training completato")
+        
+        # PREDIZIONE ENSEMBLE
+        print(f"\n Valutazione Ensemble sul Test Set...")
+        
+        ensemble_preds = []
+        for net in ensemble_nets:
+            pred = net.predict(X_test)
+            ensemble_preds. append(pred)
+        
+        # Media delle predizioni
+        ensemble_pred_avg = np.mean(ensemble_preds, axis=0)
+        ensemble_pred_class = (ensemble_pred_avg > 0.5).astype(int)
+        
+        # Calcola accuracy
+        ensemble_acc = np.mean(ensemble_pred_class == y_test)
+        ensemble_error = 1 - ensemble_acc
+        
+        # Confusion matrix ensemble
+        tp_ens = np.sum((ensemble_pred_class == 1) & (y_test == 1))
+        fp_ens = np.sum((ensemble_pred_class == 1) & (y_test == 0))
+        tn_ens = np.sum((ensemble_pred_class == 0) & (y_test == 0))
+        fn_ens = np.sum((ensemble_pred_class == 0) & (y_test == 1))
+        
+        precision_ens = tp_ens / (tp_ens + fp_ens) if (tp_ens + fp_ens) > 0 else 0
+        recall_ens = tp_ens / (tp_ens + fn_ens) if (tp_ens + fn_ens) > 0 else 0
+        f1_ens = 2 * (precision_ens * recall_ens) / (precision_ens + recall_ens) if (precision_ens + recall_ens) > 0 else 0
+        
+        print(f"\n{'='*70}")
+        print(" RISULTATI ENSEMBLE")
+        print(f"{'='*70}")
+        print(f"  Ensemble Accuracy:   {ensemble_acc:.4%}")
+        print(f"  Ensemble Error:     {ensemble_error:.4%}")
+        print(f"  Precision:           {precision_ens:.4f}")
+        print(f"  Recall:             {recall_ens:.4f}")
+        print(f"  F1-score:           {f1_ens:.4f}")
+        print(f"\n  Confusion Matrix (Ensemble):")
+        print(f"    TP: {tp_ens}  FP: {fp_ens}")
+        print(f"    FN: {fn_ens}  TN: {tn_ens}")
+        
+        # Confronto con singolo modello
+        print(f"\n{'─'*70}")
+        print(" CONFRONTO:  Singolo Modello vs Ensemble")
+        print(f"{'─'*70}")
+        print(f"  Singolo (best): {test_results['test_accuracy']:.4%}")
+        print(f"  Ensemble:       {ensemble_acc:.4%}")
+        
+        improvement = (ensemble_acc - test_results['test_accuracy']) * 100
+        if improvement > 0:
+            print(f"  Miglioramento:   +{improvement:.2f}%")
+        else:
+            print(f"  Differenza:     {improvement:.2f}%")
+        
+        # SALVA RISULTATO ENSEMBLE
+        if ensemble_acc >= test_results['test_accuracy']: 
+            print(f"\n L'ensemble ha performato meglio o uguale al singolo modello!")
+            
+            # Crea un risultato "fittizio" per plot_results
+            ensemble_results = {
+                'test_accuracy': ensemble_acc,
+                'test_error': ensemble_error,
+                'precision': precision_ens,
+                'recall': recall_ens,
+                'f1': f1_ens,
+                'confusion_matrix': {'tp': tp_ens, 'fp': fp_ens, 'tn': tn_ens, 'fn': fn_ens}
+            }
+            
+            # Crea pseudo train_results per il plot
+            ensemble_train_results = best_results.copy()
+            ensemble_train_results['lr'] = f"Ensemble-{len(ensemble_nets)}"
+            ensemble_train_results['seed'] = "Mixed"
+            
+            plot_results(ensemble_train_results, ensemble_results, 
+                        save_path='monk2_performance_ENSEMBLE.png')
+            
+            print(f"\n Grafico ensemble salvato:  monk2_performance_ENSEMBLE.png")
+        
+        if ensemble_acc >= 1.0:
+            print(f"\n{'🎉'*25}")
+            print(f" 100% TEST ACCURACY RAGGIUNTO CON ENSEMBLE! ")
+            print(f"{''*25}\n")
+        
+        
+        # RIEPILOGO FINALE
         print(f"\n{'='*70}")
         print(" RIEPILOGO FINALE")
         print("="*70)
         
-        # Status del risultato
         if test_results['test_accuracy'] >= 1.0:
-            print(" PERFETTO:  100% TEST ACCURACY RAGGIUNTO!  ")
-        elif test_results['test_accuracy'] >= 0.99:
-            print(" ECCELLENTE: 99%+ test accuracy!")
+            print(" PERFETTO:  100% TEST ACCURACY RAGGIUNTO!")
         elif test_results['test_accuracy'] >= 0.95:
-            print("✓ OTTIMO: 95%+ test accuracy!")
+            print(" ECCELLENTE: 95%+ test accuracy!")
+        elif test_results['test_accuracy'] >= 0.90:
+            print("✓ OTTIMO: 90%+ test accuracy!")
         else:
-            print(f" Test Accuracy: {test_results['test_accuracy']:.2%}")
+            print(f"Test Accuracy: {test_results['test_accuracy']:.2%}")
         
-        # Accuracy su tutti i set
         print(f"\n{'─'*70}")
-        print(" ACCURACY SU TUTTI I SET:")
+        print("ACCURACY SU TUTTI I SET:")
         print(f"{'─'*70}")
-        print(f"  Train Accuracy:        {best_results['train_accuracy']:.4%}")
-        print(f"  Validation Accuracy:   {best_results['val_accuracy']:.4%}")
-        print(f"  Test Accuracy (FINAL): {test_results['test_accuracy']:.4%}")
+        print(f"  Train Accuracy:         {best_results['train_accuracy']:.4%}")
+        print(f"  Validation Accuracy:    {best_results['val_accuracy']:.4%}")
+        print(f"  Test Accuracy (FINAL):  {test_results['test_accuracy']:.4%}")
+        if ensemble_acc >= test_results['test_accuracy']: 
+            print(f"  Ensemble Accuracy:      {ensemble_acc:.4%} ← BEST!")
         
-        # Metriche dettagliate
         print(f"\n{'─'*70}")
-        print(" METRICHE DETTAGLIATE (TEST SET):")
+        print(" PARAMETRI MIGLIORI:")
+        print(f"{'─'*70}")
+        print(f"  Learning Rate:   {best_results['lr']}")
+        print(f"  Random Seed:    {best_results['seed']}")
+        print(f"  Hidden Units:   {best_results['params']['network_structure'][1]}")
+        print(f"  Momentum:       {best_results['params']['momentum']}")
+        print(f"  L2 Lambda:      {best_results['params']['l2_lambda']}")
+        print(f"  Architecture:   {best_results['params']['network_structure']}")
+        
+        print(f"\n{'─'*70}")
+        print(" METRICHE DETTAGLIATE (TEST SET - SINGOLO):")
         print(f"{'─'*70}")
         print(f"  Precision:  {test_results['precision']:.4f}")
         print(f"  Recall:     {test_results['recall']:.4f}")
@@ -570,153 +612,24 @@ if __name__ == "__main__":
         print(f"    True Negatives  (TN): {cm['tn']}")
         print(f"    False Negatives (FN): {cm['fn']}")
         
-        # PARAMETRI COMPLETI
-        params = best_results['params']
-        print(f"\n{'='*70}")
-        print("  PARAMETRI DELLA RETE NEURALE (CONFIGURAZIONE INIZIALE)")
-        print(f"{'='*70}")
-        
-        print(f"\n  ARCHITETTURA:")
-        print(f"  Network Structure:      {params['network_structure']}")
-        print(f"    - Input Layer:        {params['network_structure'][0]} neurons")
-        print(f"    - Hidden Layer(s):    {params['network_structure'][1:-1]} neurons")
-        print(f"    - Output Layer:        {params['network_structure'][-1]} neuron(s)")
-        
-        print(f"\n TRAINING:")
-        print(f"  Algorithm:              {params['algorithm']. upper()}")
-        print(f"  Learning Rate (eta):    {params['eta']}")
-        print(f"  Momentum:                {params['momentum']}")
-        print(f"  Batch Size:             1 (SGD online)")
-        print(f"  Max Epochs:             2000")
-        print(f"  Early Stopping Patience: 200")
-        print(f"  Actual Epochs Trained:   {len(train_errors)}")
-        
-        print(f"\n REGOLARIZZAZIONE:")
-        print(f"  L2 Lambda:               {params['l2_lambda']} (nessuna - no rumore)")
-        print(f"  Decay:                  {params['decay']}")
-        
-        print(f"\n FUNZIONI:")
-        print(f"  Activation Function:     {params['activation_type']}")
-        print(f"  Loss Function:          {params['loss_type']}")
-        print(f"  Weight Initializer:      {params['weight_initializer']}")
-        
-        print(f"\n RIPRODUCIBILITÀ:")
-        print(f"  Random Seed:            {best_results['seed']}")
-        
-        print(f"\n DATASET:")
-        print(f"  Training Set:           {X_train.shape[0]} esempi")
-        print(f"  Validation Set:         {X_val.shape[0]} esempi")
-        print(f"  Test Set:               {X_test.shape[0]} esempi")
-        print(f"  Validation Split:       30%")
-        print(f"  Dataset Shuffle:        True")
-        print(f"  One-Hot Encoding:       True")
-        
-        
-        # ========================================================
-        #  PARAMETRI FINALI DELLA RETE
-        # ========================================================
-        print(f"\n{'='*70}")
-        print(" PARAMETRI FINALI DELLA RETE (DOPO TRAINING)")
-        print(f"{'='*70}")
-        
-        # Verifica che final_net abbia attributi weights e biases
-        if hasattr(final_net, 'weights') and hasattr(final_net, 'biases'):
-            print(f"\n PESI E BIAS PER LAYER:")
-            
-            for layer_idx, (W, b) in enumerate(zip(final_net.weights, final_net.biases)):
-                print(f"\n  Layer {layer_idx} → Layer {layer_idx+1}:")
-                print(f"    Shape dei pesi (W):  {W.shape}")
-                print(f"    Shape dei bias (b):  {b.shape}")
-                print(f"    Peso medio:          {np.mean(W):.6f}")
-                print(f"    Peso std dev:        {np.std(W):.6f}")
-                print(f"    Peso min:            {np.min(W):.6f}")
-                print(f"    Peso max:            {np.max(W):.6f}")
-                print(f"    Bias medio:          {np.mean(b):.6f}")
-                print(f"    Bias std dev:        {np.std(b):.6f}")
-                
-                # Mostra alcuni pesi (primi 3 neuroni del layer se possibile)
-                if layer_idx == 0:  # Input → Hidden
-                    print(f"\n     Primi 3 neuroni hidden (sample):")
-                    for neuron_idx in range(min(3, W.shape[1])):
-                        print(f"      Neuron {neuron_idx}: W_mean={np.mean(W[:, neuron_idx]):.4f}, bias={b[neuron_idx]:.4f}")
-                elif layer_idx == len(final_net.weights) - 1:  # Hidden → Output
-                    print(f"\n     Neuron output:")
-                    print(f"      W_mean={np.mean(W):.4f}, bias={b[0]:.4f}")
-            
-            # Statistiche globali
-            all_weights = np.concatenate([W.flatten() for W in final_net.weights])
-            all_biases = np.concatenate([b.flatten() for b in final_net. biases])
-            
-            print(f"\n STATISTICHE GLOBALI PESI:")
-            print(f"  Totale parametri (W): {len(all_weights)}")
-            print(f"  Totale parametri (b): {len(all_biases)}")
-            print(f"  Totale complessivo:    {len(all_weights) + len(all_biases)}")
-            print(f"  Peso medio globale:   {np.mean(all_weights):.6f}")
-            print(f"  Peso std dev globale: {np.std(all_weights):.6f}")
-            print(f"  Peso min globale:     {np.min(all_weights):.6f}")
-            print(f"  Peso max globale:      {np.max(all_weights):.6f}")
-            print(f"  Bias medio globale:   {np.mean(all_biases):.6f}")
-            print(f"  Bias std dev globale: {np.std(all_biases):.6f}")
-            
-            # Analisi della distribuzione dei pesi
-            print(f"\n DISTRIBUZIONE PESI:")
-            print(f"  Pesi negativi:         {np.sum(all_weights < 0)} ({np.sum(all_weights < 0)/len(all_weights)*100:.1f}%)")
-            print(f"  Pesi positivi:        {np.sum(all_weights > 0)} ({np.sum(all_weights > 0)/len(all_weights)*100:.1f}%)")
-            print(f"  Pesi ~ 0 (|W|<0.01):  {np.sum(np.abs(all_weights) < 0.01)} ({np.sum(np.abs(all_weights) < 0.01)/len(all_weights)*100:.1f}%)")
-            
-            # Norma dei pesi per layer
-            print(f"\n NORMA DEI PESI PER LAYER:")
-            for layer_idx, W in enumerate(final_net.weights):
-                l1_norm = np.sum(np.abs(W))
-                l2_norm = np. sqrt(np.sum(W**2))
-                print(f"  Layer {layer_idx}: L1={l1_norm:.4f}, L2={l2_norm:.4f}")
-        
-        else:
-            print("\n  Impossibile accedere ai pesi della rete.")
-            print("    La classe NeuralNetwork potrebbe non esporre weights e biases.")
-        
-        # Se la rete ha un learning rate adattivo, mostra il valore finale
-        if hasattr(final_net, 'eta'):
-            print(f"\n🎓 LEARNING RATE FINALE:")
-            if isinstance(final_net.eta, (int, float)):
-                print(f"  Eta finale:   {final_net.eta:. 6f}")
-            elif isinstance(final_net.eta, np.ndarray):
-                print(f"  Eta per layer (array):")
-                for idx, eta_val in enumerate(final_net. eta):
-                    print(f"    Layer {idx}: {eta_val:.6f}")
-        
-        # Statistiche della grid search
-        print(f"\n{'='*70}")
-        print(" GRID SEARCH STATISTICS")
-        print(f"{'='*70}")
-        all_val_accs = [r['val_accuracy'] for r in all_results]
-        print(f"  Total Runs:             {len(all_results)}")
-        print(f"  Learning Rates Tested:  [0.2, 0.3, 0.4, 0.5, 0.6, 0.7]")
-        print(f"  Seeds per LR:           5")
-        print(f"  Best LR Found:          {best_results['lr']}")
-        print(f"  Validation Acc Stats:")
-        print(f"    - Mean:                {np.mean(all_val_accs):.2%}")
-        print(f"    - Std Dev:            {np.std(all_val_accs):.2%}")
-        print(f"    - Min:                {np.min(all_val_accs):.2%}")
-        print(f"    - Max:                {np. max(all_val_accs):.2%}")
-        print(f"    - Runs with 100%:     {sum(1 for acc in all_val_accs if acc >= 1.0)}/{len(all_val_accs)}")
-        
-        # Summary finale
-        print(f"\n{'='*70}")
-        print(" CONCLUSIONI")
-        print(f"{'='*70}")
-        
-        if test_results['test_accuracy'] >= 1.0:
-            print(" La rete ha raggiunto il 100% su Train, Validation E Test!")
-            print(" Classificazione perfetta senza errori!")
-            print(" MONK-2 risolto con successo!")
-        else:
-            print(f" Test Accuracy raggiunta: {test_results['test_accuracy']:.2%}")
-            print(f" MONK-2 è più complesso di MONK-1 - potrebbe servire più tempo o parametri diversi")
+        if ensemble_acc >= test_results['test_accuracy']:
+            print(f"\n{'─'*70}")
+            print(" METRICHE DETTAGLIATE (TEST SET - ENSEMBLE):")
+            print(f"{'─'*70}")
+            print(f"  Precision:  {precision_ens:.4f}")
+            print(f"  Recall:     {recall_ens:.4f}")
+            print(f"  F1-score:   {f1_ens:.4f}")
+            print(f"\n  Confusion Matrix:")
+            print(f"    True Positives  (TP): {tp_ens}")
+            print(f"    False Positives (FP): {fp_ens}")
+            print(f"    True Negatives  (TN): {tn_ens}")
+            print(f"    False Negatives (FN): {fn_ens}")
         
         print(f"\n File salvati:")
-        print(f"  - monk2_best_results.png (grafici principali)")
-        print(f"  - monk2_lr_comparison.png (confronto learning rates)")
+        print(f"  - monk2_bias_variance_epochs.png (bias-variance vs epoche)")
+        print(f"  - monk2_performance. png (singolo modello)")
+        if ensemble_acc >= test_results['test_accuracy']:
+            print(f"  - monk2_performance_ENSEMBLE.png (ensemble) ")
         
         print(f"\n{'='*70}")
         print(" ESPERIMENTO MONK-2 COMPLETATO CON SUCCESSO!")

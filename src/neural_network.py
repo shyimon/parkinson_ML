@@ -189,13 +189,22 @@ class NeuralNetwork:
         
 
     def _update_lr_on_plateau(self, current_val_loss, patience_lr):
-        improvement = (self.best_val_loss - current_val_loss) / max(self.best_val_loss, 1e-8)
-
+        # Gestisci correttamente tutti i casi
+        if np.isinf(self.best_val_loss):
+            # Prima epoca: best_val_loss è ancora np.inf
+            improvement = 0
+        elif self.best_val_loss > 1e-6:
+            # Caso normale: calcola improvement relativo
+            improvement = (self.best_val_loss - current_val_loss) / self.best_val_loss
+        else:
+            # best_val_loss molto piccolo: usa differenza assoluta
+            improvement = self.best_val_loss - current_val_loss
+    
         if improvement > 0.001:
             self.lr_wait = 0
         else:
             self.lr_wait += 1
-
+    
         if self.lr_wait >= patience_lr:
             self.eta = max(self.eta * self.decay, 1e-4)
             self.lr_wait = 0
