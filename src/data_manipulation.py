@@ -168,8 +168,8 @@ def MEE(y_true, y_pred):
     eucledean_distances = np.sqrt(np.sum(np.square(y_true - y_pred), axis=1))
     return np.mean(eucledean_distances)
 
-def denormalize(X_norm, min_target, max_targte, x_min_orig, x_max_orig): # Inverte la normalizzazione per tornare ai valori originali
+def denormalize(X_norm, min_target, max_target, x_min_orig, x_max_orig): # Inverte la normalizzazione per tornare ai valori originali
     diff = x_max_orig - x_min_orig
     diff[diff == 0] = 1e-9
-    return ((X_norm - min_target) / (max_targte - min_target)) * diff + x_min_orig
+    return ((X_norm - min_target) / (max_target - min_target)) * diff + x_min_orig
     
