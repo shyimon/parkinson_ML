@@ -303,14 +303,14 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
             train_pred_class = (train_pred > 0.5).astype(int)
             train_error = 1 - np.mean(train_pred_class == y_train)
             
-            # Test error (SOLO per questo grafico di visualizzazione!)
-            test_pred = net. predict(X_test)
-            test_pred_class = (test_pred > 0.5).astype(int)
-            test_error = 1 - np.mean(test_pred_class == y_test)
+            # Validation error 
+            val_pred = net.predict(X_val)
+            val_pred_class = (val_pred > 0.5).astype(int)
+            val_error = 1 - np.mean(val_pred_class == y_val)
             
             epochs_run.append(epoch + 1)
             train_errors_run.append(train_error)
-            test_errors_run.append(test_error)
+            test_errors_run.append(val_error)
         
         all_curves.append((epochs_run, train_errors_run, test_errors_run))
     
@@ -378,7 +378,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
                label='Training Error (mean)', zorder=10)
         
         ax.plot(epochs_axis, test_means_smooth, color='#CB4335', linewidth=4, 
-               label='Test Error (mean)', zorder=10)
+               label='Validation Error (mean)', zorder=10)
         
         
         # ANNOTAZIONI
@@ -424,7 +424,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
     # FORMATTING
     ax.set_xlabel('Model Complexity (Training Epochs)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Prediction Error', fontsize=13, fontweight='bold')
-    ax.set_title(f'Bias-Variance Tradeoff - {dataset_name}\nTraining and Test Error vs Training Epochs', 
+    ax.set_title(f'Bias-Variance Tradeoff - {dataset_name}\nTraining and Validation Error vs Training Epochs', 
                 fontsize=14, fontweight='bold', pad=15)
     ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)

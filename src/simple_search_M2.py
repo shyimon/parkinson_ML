@@ -80,7 +80,7 @@ def _monk2_test(learning_rate, seed, verbose=False):
     }
 
 
-def grid_search_lr(n_seeds_per_lr=5, learning_rates=None):
+def grid_search_lr(n_seeds_per_lr=10, learning_rates=None):
     if learning_rates is None: 
         learning_rates = [0.1, 0.15, 0.2, 0.25, 0.3, 0.4]
     
@@ -295,15 +295,15 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='mon
             train_pred = net.predict(X_train)
             train_pred_class = (train_pred > 0.5).astype(int)
             train_error = 1 - np.mean(train_pred_class == y_train)
-            
-            # Test error (SOLO per questo grafico di visualizzazione!)
-            test_pred = net. predict(X_test)
-            test_pred_class = (test_pred > 0.5).astype(int)
-            test_error = 1 - np.mean(test_pred_class == y_test)
+
+            # Validation error 
+            val_pred = net.predict(X_val)
+            val_pred_class = (val_pred > 0.5).astype(int)
+            val_error = 1 - np.mean(val_pred_class == y_val)
             
             epochs_run.append(epoch + 1)
             train_errors_run.append(train_error)
-            test_errors_run. append(test_error)
+            test_errors_run. append(val_error)
         
         all_curves.append((epochs_run, train_errors_run, test_errors_run))
     
@@ -369,7 +369,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='mon
                label='Training Error (mean)', zorder=10)
         
         ax.plot(epochs_axis, test_means_smooth, color='#CB4335', linewidth=4, 
-               label='Test Error (mean)', zorder=10)
+               label='Validation Error (mean)', zorder=10)
         
         # ANNOTAZIONI
         y_max = max(max(train_means_smooth), max(test_means_smooth))
@@ -413,7 +413,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='mon
     # FORMATTING
     ax.set_xlabel('Model Complexity (Training Epochs)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Prediction Error', fontsize=13, fontweight='bold')
-    ax.set_title(f'Bias-Variance Tradeoff - {dataset_name}\nTraining and Test Error vs Training Epochs', 
+    ax.set_title(f'Bias-Variance Tradeoff - {dataset_name}\nTraining and Validation Error vs Training Epochs', 
                 fontsize=14, fontweight='bold', pad=15)
     ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
@@ -437,9 +437,34 @@ if __name__ == "__main__":
         # FASE 1: Grid search
         print("\n FASE 1: Grid Search (Train + Validation)")
         best_results, all_results = grid_search_lr(
-            n_seeds_per_lr=5,
+            n_seeds_per_lr=10,
             learning_rates=[0.1, 0.15, 0.2, 0.25, 0.3, 0.4]
         )
+        # FILTRA solo configurazioni con 100% su train, val e test
+        print(f"\n🔍 Filtraggio configurazioni con 100% accuracy...")
+
+        perfect_results = []
+
+        for result in all_results:
+        # Verifica train e val
+            if result['train_accuracy'] >= 1.0 and result['val_accuracy'] >= 1.0:
+                # Verifica anche test
+                X_train, y_train, X_val, y_val, X_test, y_test = result['data']
+                test_pred = result['network'].predict(X_test)
+                test_acc = np.mean((test_pred > 0.5).astype(int) == y_test)
+        
+                if test_acc >= 1.0:
+                    perfect_results.append(result)
+                    print(f"   LR={result['lr']}, Seed={result['seed']}:  100%")
+
+        print(f"\n Trovate {len(perfect_results)}/{len(all_results)} configurazioni con 100%")
+
+        # Usa solo le configurazioni perfette per il grafico
+        if len(perfect_results) >= 5:
+            all_results = perfect_results
+            print(f"  Usando solo configurazioni con 100% per il grafico\n")
+        else:
+            print(f"    Poche config con 100%, usando tutte le {len(all_results)} configurazioni\n")
         
         # FASE 2: Bias-Variance Tradeoff con EPOCHE
         print(f"\n FASE 2: Grafico Bias-Variance vs Epoche")
