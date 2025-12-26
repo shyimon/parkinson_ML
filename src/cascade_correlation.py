@@ -297,3 +297,7 @@ class CascadeNetwork:
         
         S = np.sum(np.abs(covariances))
         return S
+    
+    def compute_mee(self, y_true, y_pred):
+        euclidean_distances = np.sqrt(np.sum((y_true - y_pred) ** 2, axis=1))
+        return(np.mean(euclidean_distances))
