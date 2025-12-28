@@ -43,7 +43,7 @@ def _monk1_test(learning_rate, seed, verbose=False):
         X_val, y_val,
         epochs=400,
         batch_size=1,
-        patience=150,
+        patience=50,
         verbose=verbose
     )
     
@@ -263,7 +263,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
     from collections import defaultdict
     
     print(f"\n{'='*70}")
-    print(f"📊 CREAZIONE GRAFICO BIAS-VARIANCE VS EPOCHE")
+    print(f"CREAZIONE GRAFICO LOSS VS EPOCHE")
     print(f"{'='*70}")
     
     # RE-TRAINING DI ALCUNI MODELLI CON TRACKING
@@ -285,11 +285,11 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
         params = result['params']. copy()
         net = NeuralNetwork(**params)
         
-        train_errors_run = []
-        test_errors_run = []
+        train_losses_run = []
+        val_losses_run = []
         epochs_run = []
         
-        max_epochs = 200
+        max_epochs = 400
         batch_size = 1
         
         for epoch in range(max_epochs):
@@ -300,19 +300,17 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
             
             # Training error
             train_pred = net.predict(X_train)
-            train_pred_class = (train_pred > 0.5).astype(int)
-            train_error = 1 - np.mean(train_pred_class == y_train)
+            train_loss = (1/2) * np.mean((train_pred - y_train)**2) #MSE LOSS
             
             # Validation error 
             val_pred = net.predict(X_val)
-            val_pred_class = (val_pred > 0.5).astype(int)
-            val_error = 1 - np.mean(val_pred_class == y_val)
+            val_loss = (1/2) * np.mean((val_pred - y_val)**2) #MSE LOSS
             
             epochs_run.append(epoch + 1)
-            train_errors_run.append(train_error)
-            test_errors_run.append(val_error)
+            train_losses_run.append(train_loss)
+            val_losses_run.append(val_loss)
         
-        all_curves.append((epochs_run, train_errors_run, test_errors_run))
+        all_curves.append((epochs_run, train_losses_run, val_losses_run))
     
     print("\n Re-training completato")
     
@@ -332,21 +330,6 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
     # PLOT
     fig, ax = plt.subplots(figsize=(11, 7))
     
-    # PLOT LINEE SOTTILI (ogni singolo run - smoothed)
-    for epochs_run, train_errors_run, test_errors_run in all_curves:
-        if len(train_errors_run) > 1:
-            # Smooth individualmente
-            train_smooth = smooth_curve(train_errors_run, weight=0.85)
-            test_smooth = smooth_curve(test_errors_run, weight=0.85)
-            
-            # Linee sottili blu (training)
-            ax.plot(epochs_run, train_smooth, color='lightblue', alpha=0.3, 
-                   linewidth=0.8, zorder=1)
-            
-            # Linee sottili rosse (test)
-            ax.plot(epochs_run, test_smooth, color='lightcoral', alpha=0.3, 
-                   linewidth=0.8, zorder=1)
-    
     # CALCOLA MEDIE PER EPOCA
     max_len = max(len(curve[0]) for curve in all_curves) if all_curves else 100
     
@@ -357,61 +340,36 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
         train_vals = []
         test_vals = []
         
-        for epochs_run, train_errors_run, test_errors_run in all_curves:
-            if epoch_idx < len(train_errors_run):
-                train_vals. append(train_errors_run[epoch_idx])
-                test_vals.append(test_errors_run[epoch_idx])
+        for epochs_run, train_losses_run, val_losses_run in all_curves:
+            if epoch_idx < len(train_losses_run):
+                train_vals.append(train_losses_run[epoch_idx])
+                test_vals.append(val_losses_run[epoch_idx])
         
         if train_vals:
             train_means.append(np.mean(train_vals))
             test_means.append(np.mean(test_vals))
     
     epochs_axis = range(1, len(train_means) + 1)
+
     
     # SMOOTH DELLE MEDIE
     if train_means:
-        train_means_smooth = smooth_curve(train_means, weight=0.90)
-        test_means_smooth = smooth_curve(test_means, weight=0.90)
+        train_means_smooth = smooth_curve(train_means, weight=0.98)
+        val_means_smooth = smooth_curve(test_means, weight=0.98)
         
-        # LINEE SPESSE (medie smoothed)
-        ax.plot(epochs_axis, train_means_smooth, color='#1F618D', linewidth=4, 
-               label='Training Error (mean)', zorder=10)
-        
-        ax.plot(epochs_axis, test_means_smooth, color='#CB4335', linewidth=4, 
-               label='Validation Error (mean)', zorder=10)
-        
-        
+        # linee
+        ax.plot(epochs_axis, train_means_smooth, label='Training Loss', color='#1F618D', linewidth=2, alpha=0.8, zorder=10)
+        ax.plot(epochs_axis, val_means_smooth, label='Validation Loss', color='#E74C3C', linewidth=2, alpha=0.8, zorder=10)
+
         # ANNOTAZIONI
-        y_max = max(max(train_means_smooth), max(test_means_smooth))
-        y_min = min(min(train_means_smooth), min(test_means_smooth))
+        y_max = max(max(train_means_smooth), max(val_means_smooth))
+        y_min = min(min(train_means_smooth), min(val_means_smooth))
         y_range = y_max - y_min if y_max > y_min else 1.0
         
-        # High Bias, Low Variance (sinistra)
-        text_x_left = max_len * 0.1
-        ax.text(text_x_left, y_max - 0.03 * y_range,
-               'High Bias\nLow Variance', fontsize=11, ha='left', va='top',
-               bbox=dict(boxstyle='round,pad=0.5', facecolor='wheat', alpha=0.8,
-                        edgecolor='orange', linewidth=1.5))
-        
-        # Low Bias, High Variance (destra)
-        text_x_right = max_len * 0.9
-        ax.text(text_x_right, y_max - 0.03 * y_range,
-               'Low Bias\nHigh Variance', fontsize=11, ha='right', va='top',
-               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightcoral', alpha=0.8,
-                        edgecolor='red', linewidth=1.5))
-        
-        # Lucky/Unlucky
-        ax.text(max_len * 0.95, y_min + 0.15 * y_range, 
-               'lucky', fontsize=11, style='italic', color='#1F618D', 
-               ha='right', fontweight='bold')
-        ax.text(max_len * 0.95, y_max - 0.25 * y_range, 
-               'unlucky', fontsize=11, style='italic', color='#CB4335', 
-               ha='right', fontweight='bold')
-        
         # Optimal complexity (minimo test error)
-        min_test_idx = np.argmin(test_means_smooth)
-        optimal_epoch = min_test_idx + 1
-        optimal_error = test_means_smooth[min_test_idx]
+        min_val_idx = np.argmin(val_means_smooth)
+        optimal_epoch = min_val_idx + 1
+        optimal_error = val_means_smooth[min_val_idx]
         
         ax.axvline(x=optimal_epoch, color='green', linestyle=':', 
                   linewidth=2.5, alpha=0.7, zorder=9,
@@ -422,9 +380,9 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
     
    
     # FORMATTING
-    ax.set_xlabel('Model Complexity (Training Epochs)', fontsize=13, fontweight='bold')
-    ax.set_ylabel('Prediction Error', fontsize=13, fontweight='bold')
-    ax.set_title(f'Bias-Variance Tradeoff - {dataset_name}\nTraining and Validation Error vs Training Epochs', 
+    ax.set_xlabel('Epochs', fontsize=13, fontweight='bold')
+    ax.set_ylabel('MSE Loss', fontsize=13, fontweight='bold')
+    ax.set_title(f'Training loss and Validation loss vs Training Epochs - {dataset_name}\n', 
                 fontsize=14, fontweight='bold', pad=15)
     ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
@@ -435,37 +393,37 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"\n Grafico Bias-Variance (epoche) salvato in: {save_path}")
+    print(f"\n Grafico salvato in: {save_path}")
     plt.show()
 
 
 if __name__ == "__main__":  
     try:
         print("="*70)
-        print("🎯 MONK-1 - BINARY CLASSIFICATION")
+        print(" MONK-1 - BINARY CLASSIFICATION")
         print("="*70)
         
         # FASE 1: Grid search
-        print("\n📍 FASE 1: Grid Search (Train + Validation)")
+        print("\n FASE 1: Grid Search (Train + Validation)")
         best_results, all_results = grid_search_lr(
             n_seeds_per_lr=50,
-            learning_rates=[0.15, 0.2, 0.25, 0.35]
+            learning_rates=[0.005, 0.1, 0.15, 0.2, 0.25]
         )
         
         # FASE 2: Bias-Variance Tradeoff con EPOCHE
-        print(f"\n📍 FASE 2: Grafico Bias-Variance vs Epoche")
+        print(f"\n FASE 2: Grafico Bias-Variance vs Epoche")
         plot_bias_variance_epochs(all_results, 
                                   dataset_name='MONK-1',
                                   save_path='monk1_bias_variance_epochs.png')
         
         # FASE 3: Valuta sul TEST SET (UNA SOLA VOLTA!)
-        print(f"\n📍 FASE 3: Valutazione finale sul Test Set")
+        print(f"\n FASE 3: Valutazione finale sul Test Set")
         X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
         final_net = best_results['network']
         test_results = evaluate_on_test_set(final_net, X_test, y_test)
         
         # FASE 4: Plot Model Performance + Confusion Matrix
-        print(f"\n📍 FASE 4: Grafico Model Performance")
+        print(f"\n FASE 4: Grafico Model Performance")
         plot_results(best_results, test_results, save_path='monk1_performance.png')
         
         # FASE 5: ENSEMBLE 

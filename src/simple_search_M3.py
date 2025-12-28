@@ -287,8 +287,8 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-3', save_path='mon
         params = result['params'].copy()
         net = NeuralNetwork(**params)
         
-        train_errors_run = []
-        test_errors_run = []
+        train_losses_run = []
+        val_losses_run = []
         epochs_run = []
         
         max_epochs = 150
@@ -302,19 +302,17 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-3', save_path='mon
             
             # Training error
             train_pred = net.predict(X_train)
-            train_pred_class = (train_pred > 0.5).astype(int)
-            train_error = 1 - np.mean(train_pred_class == y_train)
+            train_loss = (1/2)*np.mean((train_pred - y_train) ** 2)  # MSE
             
             # Validation error
             val_pred = net.predict(X_val)
-            val_pred_class = (val_pred > 0.5).astype(int)
-            val_error = 1 - np.mean(val_pred_class == y_val)
+            val_loss = (1/2)*np.mean((val_pred - y_val) ** 2)  # MSE
             
             epochs_run.append(epoch + 1)
-            train_errors_run.append(train_error)
-            test_errors_run.append(val_error)
+            train_losses_run.append(train_loss)
+            val_losses_run.append(val_loss)
         
-        all_curves.append((epochs_run, train_errors_run, test_errors_run))
+        all_curves.append((epochs_run, train_losses_run, val_losses_run))
     
     print("\n Re-training completato")
     
@@ -331,17 +329,6 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-3', save_path='mon
     
     # PLOT
     fig, ax = plt.subplots(figsize=(11, 7))
-    
-    # PLOT LINEE SOTTILI (ogni singolo run - smoothed)
-    for epochs_run, train_errors_run, test_errors_run in all_curves:
-        if len(train_errors_run) > 1:
-            train_smooth = smooth_curve(train_errors_run, weight=0.85)
-            test_smooth = smooth_curve(test_errors_run, weight=0.85)
-            
-            ax.plot(epochs_run, train_smooth, color='lightblue', alpha=0.3, 
-                   linewidth=0.8, zorder=1)
-            ax.plot(epochs_run, test_smooth, color='lightcoral', alpha=0.3, 
-                   linewidth=0.8, zorder=1)
     
     # CALCOLA MEDIE PER EPOCA
     max_len = max(len(curve[0]) for curve in all_curves) if all_curves else 150
@@ -366,42 +353,20 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-3', save_path='mon
     
     # SMOOTH DELLE MEDIE
     if train_means:
-        train_means_smooth = smooth_curve(train_means, weight=0.90)
-        test_means_smooth = smooth_curve(test_means, weight=0.90)
+        train_means_smooth = smooth_curve(train_means, weight=0.98)
+        test_means_smooth = smooth_curve(test_means, weight=0.98)
         
-        # LINEE SPESSE (medie smoothed)
-        ax.plot(epochs_axis, train_means_smooth, color='#1F618D', linewidth=4, 
-               label='Training Error (mean)', zorder=10)
-        ax.plot(epochs_axis, test_means_smooth, color='#CB4335', linewidth=4, 
-               label='Validation Error (mean)', zorder=10)
+        # linee curve
+        ax.plot(epochs_axis, train_means_smooth, color='#1F618D', linewidth=2, 
+               label='Training Loss (mean)', zorder=10)
+        ax.plot(epochs_axis, test_means_smooth, color='#CB4335', linewidth=2,
+               label='Validation Loss (mean)', zorder=10)
         
         # ANNOTAZIONI
         y_max = max(max(train_means_smooth), max(test_means_smooth))
         y_min = min(min(train_means_smooth), min(test_means_smooth))
         y_range = y_max - y_min if y_max > y_min else 1.0
-        
-        # High Bias, Low Variance
-        text_x_left = max_len * 0.1
-        ax.text(text_x_left, y_max - 0.03 * y_range,
-               'High Bias\nLow Variance', fontsize=11, ha='left', va='top',
-               bbox=dict(boxstyle='round,pad=0.5', facecolor='wheat', alpha=0.8,
-                        edgecolor='orange', linewidth=1.5))
-        
-        # Low Bias, High Variance
-        text_x_right = max_len * 0.9
-        ax.text(text_x_right, y_max - 0.03 * y_range,
-               'Low Bias\nHigh Variance', fontsize=11, ha='right', va='top',
-               bbox=dict(boxstyle='round,pad=0.5', facecolor='lightcoral', alpha=0.8,
-                        edgecolor='red', linewidth=1.5))
-        
-        # Lucky/Unlucky
-        ax.text(max_len * 0.95, y_min + 0.15 * y_range, 
-               'lucky', fontsize=11, style='italic', color='#1F618D', 
-               ha='right', fontweight='bold')
-        ax.text(max_len * 0.95, y_max - 0.25 * y_range, 
-               'unlucky', fontsize=11, style='italic', color='#CB4335', 
-               ha='right', fontweight='bold')
-        
+
         # Optimal complexity
         min_test_idx = np.argmin(test_means_smooth)
         optimal_epoch = min_test_idx + 1
@@ -416,7 +381,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-3', save_path='mon
     # FORMATTING
     ax.set_xlabel('Model Complexity (Training Epochs)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Prediction Error', fontsize=13, fontweight='bold')
-    ax.set_title(f'Bias-Variance Tradeoff - {dataset_name}\nTraining and Validation Error vs Training Epochs\n(Dataset with 5% noise)', 
+    ax.set_title(f'Loss vs training epoches - {dataset_name}',
                 fontsize=13, fontweight='bold', pad=15)
     ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
