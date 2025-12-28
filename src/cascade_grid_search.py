@@ -1,5 +1,6 @@
 import itertools
 import numpy as np
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 from cascade_correlation import CascadeNetwork
 from data_manipulation import *
@@ -63,7 +64,12 @@ class CascadeGridSearch:
                 max_hidden_units=params['max_hidden_units']
             )
             
-            loss_history = net.loss_history
+            history_package = {
+                'train': net.loss_history,
+                'val': net.val_loss_history
+            }
+            
+            y_pred_train = np.array([net.forward(x) for x in self.X_train])
             
             y_pred_train = np.array([net.forward(x) for x in self.X_train])
             y_pred_val = np.array([net.forward(x) for x in self.X_val])
@@ -79,7 +85,7 @@ class CascadeGridSearch:
                 'val_loss': val_loss,
                 'test_loss': test_loss,
                 'min_val_loss': val_loss, 
-                'history': loss_history
+                'history': history_package
             }
             
             if self.dataset_name != 'cup':
@@ -124,19 +130,42 @@ class CascadeGridSearch:
     def coarse_grid_search(self):
         print("INIZIO COARSE SEARCH CASCADE")
 
-        param_grid = {
-            'learning_rate': [0.01, 0.05, 0.1],   
-            'patience': [20, 50],                 
-            'tolerance': [0.01, 0.001],           
-            'max_hidden_units': [5, 10, 15],      
-            'algorithm': ['quickprop', 'rprop'],
-            'epochs': [1000]
-        }
+        if self.dataset_name == 'cup':
+            param_grid = {
+                'learning_rate': [0.005, 0.01, 0.02], # LR più bassi per precisione
+                'patience': [50, 80],                 # Più pazienza
+                'tolerance': [0.001, 0.0005],         # Tolleranza più stretta
+                'max_hidden_units': [5, 10, 15],      # Più neuroni per complessità
+                'algorithm': ['rprop', 'quickprop'],  # Rprop spesso va meglio su regressione
+                'epochs': [1000],
+                'l2_lambda': [0.0001, 0.001]          # Regolarizzazione importante
+            }
+        elif self.dataset_name == 'monk3':
+           param_grid = {
+                'learning_rate': [0.1, 0.2],
+                'patience': [30, 40],       
+                'tolerance': [0.01, 0.02],  
+                'max_hidden_units': [2, 3, 4], 
+                'algorithm': ['quickprop'],
+                'l2_lambda': [0.01, 0.001], 
+                'epochs': [1000]
+            }
+        elif self.dataset_name == 'monk1' or self.dataset_name == 'monk2':
+             param_grid = {
+                'learning_rate': [0.1, 0.2],          # LR più alti
+                'patience': [30],
+                'tolerance': [0.01],
+                'max_hidden_units': [2, 3],           
+                'algorithm': ['quickprop'],           # Quickprop vola sui Monk
+                'epochs': [1000],
+                'l2_lambda': [0.0001]                 # Regolarizzazione minima
+            }
         
         all_combinations = []
         for combo in itertools.product(*param_grid.values()):
             params = dict(zip(param_grid.keys(), combo))
             
+            # Logica correzione parametri (SGD/Momentum)
             if params['algorithm'] == 'sgd' and params.get('momentum', 0.0) == 0.0:
                 params['mu'] = 1.75
                 all_combinations.append(params)
@@ -145,24 +174,56 @@ class CascadeGridSearch:
                 all_combinations.append(params)
         
         print(f"Numero totale di combinazioni: {len(all_combinations)}")
+        print(f"Sto utilizzando tutti i core disponibili del processore Ryzen 5 3500U...")
         
+        shared_data = (
+            self.X_train, self.y_train, 
+            self.X_val, self.y_val, 
+            self.X_test, self.y_test
+        )
+        
+        def process_single_combination(params, data_pack):
+            # spacchetta i dati condivisi
+            X_tr, y_tr, X_v, y_v, X_te, y_te = data_pack
+            
+            # Crea istanza
+            searcher = CascadeGridSearch(self.dataset_name)
+            
+            # SOVRASCRIVI i dati con quelli fissati dal main process
+            # (Ignoriamo quelli caricati nel __init__ del worker)
+            searcher.X_train, searcher.y_train = X_tr, y_tr
+            searcher.X_val, searcher.y_val = X_v, y_v
+            searcher.X_test, searcher.y_test = X_te, y_te
+            
+            # Disabilita stampe
+            import sys, os
+            original_stdout = sys.stdout
+            sys.stdout = open(os.devnull, 'w')
+            try:
+                results, _ = searcher.train_evaluate(params)
+            finally:
+                sys.stdout.close()
+                sys.stdout = original_stdout
+            
+            return (params, results)
+        
+        # Passiamo 'shared_data' a ogni job
+        all_results_raw = Parallel(n_jobs=-1, verbose=10)(
+            delayed(process_single_combination)(p, shared_data) for p in all_combinations
+        )
+        
+        all_results = [res for res in all_results_raw if res[1] is not None]
+        
+        # ... (Il resto del codice per ordinare e stampare rimane uguale) ...
+        # RICERCA DEL MIGLIORE
         best_score = float('inf')
         best_params = None
-        all_results = []
         
-        for i, params in enumerate(tqdm(all_combinations, desc="Grid Search")):
-            results, _ = self.train_evaluate(params)
-            
-            if results is not None:
-                all_results.append((params, results))
-                
-                # Usa validation loss (MSE normalizzato) per la selezione del modello migliore
-                current_score = results['min_val_loss']
-                
-                if current_score < best_score:
-                    best_score = current_score
-                    best_params = params.copy()
-                    # print(f"\nNuovo miglior risultato: {current_score:.6f}")
+        for params, results in all_results:
+            current_score = results['min_val_loss']
+            if current_score < best_score:
+                best_score = current_score
+                best_params = params.copy()
         
         print("\n" + "="*80)
         print("MIGLIORI RISULTATI COARSE GRID SEARCH")
@@ -260,11 +321,16 @@ class CascadeGridSearch:
         training_loss = []
         validation_loss = []
             
-        if isinstance(history, (list, np.ndarray)):
+        if isinstance(history, dict):
+            training_loss = history.get('train', [])
+            validation_loss = history.get('val', [])
+        elif isinstance(history, (list, np.ndarray)):
             training_loss = history
         
         # Plot Loss
         axes[0].plot(training_loss, label='Training Loss', alpha=0.7)
+        if len(validation_loss) > 0:
+            axes[0].plot(validation_loss, label='Validation Loss', color='orange', linestyle='--', alpha=0.7)
         axes[0].set_xlabel('Epoche')
         axes[0].set_ylabel('Loss (MSE Normalized)')
         axes[0].set_title(f'Learning Curve - {self.dataset_name}')
