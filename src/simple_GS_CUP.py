@@ -21,15 +21,13 @@ def smooth_curve(values, weight=0.9):
     return smoothed
 
 
-def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=50, verbose=False):
+def _cup_test(learning_rate, seed, l2_lambda=0.0001, momentum=0.9, hidden_units=50, verbose=False):
     
     if verbose:
-        print(f"  Seed: {seed}, LR: {learning_rate}, L2: {l2_lambda}, Hidden: {hidden_units}")
+        print(f" LR: {learning_rate}, L2: {l2_lambda}, Momentum: {momentum}, Hidden: {hidden_units}")
     
-    # Seed per riproducibilità
     np.random.seed(seed)
     
-    # Carica i dati CUP
     X_train, y_train, X_val, y_val, X_test, y_test = return_CUP(
         dataset_shuffle=True,
         train_size=350,
@@ -51,9 +49,8 @@ def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=5
     y_val_norm = normalize(y_val, -1, 1, y_min, y_max)
     y_test_norm = normalize(y_test, -1, 1, y_min, y_max)
     
-    # Configurazione rete
     params = {
-        'network_structure': [12, hidden_units, 4],  # 12 input, hidden variabile, 4 output
+        'network_structure': [12, hidden_units, 4], 
         'eta': learning_rate,
         'l2_lambda': l2_lambda,
         'momentum': momentum,
@@ -69,7 +66,6 @@ def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=5
 
     }
     
-    # Crea e addestra la rete
     net = NeuralNetwork(**params)
     
     history = net.fit(
@@ -80,7 +76,34 @@ def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=5
         patience=300,
         verbose=verbose
     )
+    train_loss_history = []
+    val_loss_history = []
+
+    if isinstance(history, dict):
+        if 'training' in history:
+            if isinstance(history['training'], list):
+                train_loss_history = history['training']
+            elif isinstance(history['training'], (int, float)):
+                tain_loss_history = [history['training']]
+        if 'validation' in history:
+            if isinstance(history['validation'], list):
+                val_loss_history = history['validation']
+            elif isinstance(history['validation'], (int, float)):
+                val_loss_history = [history['validation']]
+    elif isinstance(history, (list, tuple)):
+        if len(history) == 2:
+            train_loss_history = history[0] if isinstance(history[0], list) else [history[0]]
+            val_loss_history = history[1] if isinstance(history[1], list) else [history[1]]
+    if len(train_loss_history) == 0:
+        print(" History vuota, usando loss finale")
+        train_pred_norm = net.predict(X_train_norm)
+        train_loss = 0.5 * np.mean((train_pred_norm - y_train_norm) ** 2)
+        train_loss_history = [train_loss]
     
+        val_pred_norm = net.predict(X_val_norm)
+        val_loss = 0.5 * np.mean((val_pred_norm - y_val_norm) ** 2)
+        val_loss_history = [val_loss] 
+
     # Predizioni
     train_pred_norm = net.predict(X_train_norm)
     val_pred_norm = net.predict(X_val_norm)
@@ -89,11 +112,9 @@ def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=5
     train_pred = denormalize(train_pred_norm, -1, 1, y_min, y_max)
     val_pred = denormalize(val_pred_norm, -1, 1, y_min, y_max)
     
-    # Calcola MEE (metrica di valutazione)
+    
     train_mee = MEE(y_train, train_pred)
     val_mee = MEE(y_val, val_pred)
-    
-    # Calcola anche MSE per confronto
     train_mse = MSE(y_train, train_pred)
     val_mse = MSE(y_val, val_pred)
     
@@ -110,8 +131,8 @@ def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=5
         'val_mee': val_mee,
         'train_mse': train_mse,
         'val_mse':  val_mse,
-        'train_loss_history': train_loss_history,  # ← AGGIUNGI
-        'val_loss_history':  val_loss_history,  # ← AGGIUNGI
+        'train_loss_history': train_loss_history,  
+        'val_loss_history':  val_loss_history,  
         'network':  net,
         'history': history,
         'params':  params,
@@ -125,9 +146,9 @@ def _cup_test(learning_rate, seed, l2_lambda=0.001, momentum=0.9, hidden_units=5
     }
 
 def grid_search_cup(n_seeds_per_config=3):
-    learning_rates = [0.005, 0.01, 0.02]
+    learning_rates = [0.005, 0.001, 0.002]
     l2_lambdas = [0.00005, 0.0001, 0.0005]
-    momentums = [0.90, 0.95]
+    momentums = [0.9, 0.95]
     hidden_units_list=[40, 60, 80]
 
     best_val_mee = float('inf')
@@ -139,8 +160,7 @@ def grid_search_cup(n_seeds_per_config=3):
     current_run = 0
     
     print(f"\n{'#'*70}")
-    print(f" GRID SEARCH CUP:  {len(learning_rates)} LRs × {len(l2_lambdas)} L2s × "
-          f"{len(momentums)} Moms × {len(hidden_units_list)} Hidden × {n_seeds_per_config} seeds = {total_runs} runs")
+    print(f" GRID SEARCH CUP: {total_runs} CONFIGURAZIONI TOTALI")
     print(f"{'#'*70}\n")
     
     for lr in learning_rates:
@@ -157,18 +177,20 @@ def grid_search_cup(n_seeds_per_config=3):
                         
                         print(f"\n Run {current_run}/{total_runs} - LR={lr}, L2={l2}, Mom={mom}, "
                               f"Hidden={hidden}, Seed={seed}", end=" → ")
-                        
-                        results = _cup_test(learning_rate=lr, seed=seed, l2_lambda=l2, 
-                                           momentum=mom, hidden_units=hidden, verbose=False)
-                        all_results.append(results)
-                        
-                        print(f"Train MEE: {results['train_mee']:.4f}, Val MEE: {results['val_mee']:.4f}")
-                        
-                        if results['val_mee'] < best_val_mee:
-                            best_val_mee = results['val_mee']
-                            best_results = results
-                            print(f"   NUOVO BEST VAL MEE: {best_val_mee:.4f}")
-    
+                        try:
+                            results = _cup_test(learning_rate=lr, seed=seed, l2_lambda=l2, 
+                                               momentum=mom, hidden_units=hidden, verbose=False)
+                            all_results.append(results)
+                            print(f"Val MEE: {results['val_mee']:.4f}")
+                            
+                            if results['val_mee'] < best_val_mee:
+                                best_val_mee = results['val_mee']
+                                best_results = results
+                                print(f"   NUOVO BEST VAL MEE: {best_val_mee:.4f}")
+                        except Exception as e:
+                            print(f"Error: {str(e)[:40]}")
+                            continue
+
     print(f"\n{'='*70}")
     print(f" MIGLIOR CONFIGURAZIONE GRID SEARCH")
     print(f"{'='*70}")
@@ -462,6 +484,14 @@ if __name__ == "__main__":
         # FASE 1: Grid search
         print("\n FASE 1: Grid Search")
         best_results, all_results = grid_search_cup(n_seeds_per_config=3)
+        
+        # ← AGGIUNGI QUESTO DEBUG: 
+        print(f"\n DEBUG best_results keys: {best_results.keys()}")
+        print(f" train_loss_history length: {len(best_results. get('train_loss_history', []))}")
+        print(f" val_loss_history length: {len(best_results.get('val_loss_history', []))}")
+
+        if len(best_results. get('train_loss_history', [])) > 0:
+            print(f" train_loss_history primi 5: {best_results['train_loss_history'][:5]}")
         
         # FASE 2: Grafico Loss vs Epochs
         print(f"\n FASE 2: Grafico Loss vs Epochs")
