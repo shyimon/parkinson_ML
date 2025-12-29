@@ -1,5 +1,6 @@
 import itertools
 import numpy as np
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 from cascade_correlation import CascadeNetwork
 from data_manipulation import *
@@ -22,24 +23,20 @@ class CascadeGridSearch:
         elif self.dataset_name == 'cup':
             self.X_train, self.y_train, self.X_val, self.y_val, self.X_test, self.y_test = return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_size=125)
             
-            # Salva minimi e massimi per denormalizzazione futura
+            # Salvataggio min/max come attributi di classe per usarli dop
             self.x_min = self.X_train.min(axis=0)
             self.x_max = self.X_train.max(axis=0)
             self.y_min = self.y_train.min(axis=0)
             self.y_max = self.y_train.max(axis=0)
-            # Normalizzazione per CUP
-            x_min = self.X_train.min(axis=0)
-            x_max = self.X_train.max(axis=0)
-            y_min = self.y_train.min(axis=0)
-            y_max = self.y_train.max(axis=0)
             
-            self.X_train = normalize(self.X_train, -1, 1, x_min, x_max)
-            self.X_val = normalize(self.X_val, -1, 1, x_min, x_max)
-            self.X_test = normalize(self.X_test, -1, 1, x_min, x_max)
+            # Normalizzazione (Training su dati normalizzati tra -1 e 1)
+            self.X_train = normalize(self.X_train, -1, 1, self.x_min, self.x_max)
+            self.X_val = normalize(self.X_val, -1, 1, self.x_min, self.x_max)
+            self.X_test = normalize(self.X_test, -1, 1, self.x_min, self.x_max)
             
-            self.y_train = normalize(self.y_train, -1, 1, y_min, y_max)
-            self.y_val = normalize(self.y_val, -1, 1, y_min, y_max)
-            self.y_test = normalize(self.y_test, -1, 1, y_min, y_max)
+            self.y_train = normalize(self.y_train, -1, 1, self.y_min, self.y_max)
+            self.y_val = normalize(self.y_val, -1, 1, self.y_min, self.y_max)
+            self.y_test = normalize(self.y_test, -1, 1, self.y_min, self.y_max)
         
         print(f"Dataset {self.dataset_name} caricato:")
         print(f"  Training: {self.X_train.shape[0]} esempi, {self.X_train.shape[1]} features")
@@ -57,8 +54,8 @@ class CascadeGridSearch:
                 learning_rate=params['learning_rate'], 
                 algorithm=params['algorithm']
             )
-
-            _ = net.train(
+            
+            final_error = net.train(
                 self.X_train, self.y_train, 
                 X_val = self.X_val, y_val = self.y_val,
                 max_epochs=params.get('epochs', 1000), 
@@ -67,13 +64,18 @@ class CascadeGridSearch:
                 max_hidden_units=params['max_hidden_units']
             )
             
-            loss_history = net.loss_history
-            val_loss_history = net.val_loss_history
+            history_package = {
+                'train': net.loss_history,
+                'val': net.val_loss_history
+            }
+            
+            y_pred_train = np.array([net.forward(x) for x in self.X_train])
             
             y_pred_train = np.array([net.forward(x) for x in self.X_train])
             y_pred_val = np.array([net.forward(x) for x in self.X_val])
             y_pred_test = np.array([net.forward(x) for x in self.X_test])
             
+            # Calcolo Loss (MSE su dati normalizzati)
             train_loss = np.mean((self.y_train - y_pred_train)**2)
             val_loss = np.mean((self.y_val - y_pred_val)**2)
             test_loss = np.mean((self.y_test - y_pred_test)**2)
@@ -82,9 +84,8 @@ class CascadeGridSearch:
                 'train_loss': train_loss,
                 'val_loss': val_loss,
                 'test_loss': test_loss,
-                'min_val_loss': np.min(net.val_loss_history) if len(net.val_loss_history) > 0 else val_loss, # minimo storico di validation loss 
-                'history': loss_history,
-                'val_history': val_loss_history
+                'min_val_loss': val_loss, 
+                'history': history_package
             }
             
             if self.dataset_name != 'cup':
@@ -95,27 +96,25 @@ class CascadeGridSearch:
                 test_accuracy = np.mean((y_pred_test > 0.5).astype(int) == self.y_test)
                 results['test_accuracy'] = test_accuracy
             else:
+                # CALCOLO MEE SU SCALA ORIGINALE 
                 target_min = -1
                 target_max = 1
                 
-                # Training
+                # Denormalizzazione Target
                 y_train_denorm = denormalize(self.y_train, target_min, target_max, self.y_min, self.y_max)
-                pred_train_denorm = denormalize(y_pred_train, target_min, target_max, self.y_min, self.y_max)
-                
-                # Validation
                 y_val_denorm = denormalize(self.y_val, target_min, target_max, self.y_min, self.y_max)
-                pred_val_denorm = denormalize(y_pred_val, target_min, target_max, self.y_min, self.y_max)
-                
-                # Test
                 y_test_denorm = denormalize(self.y_test, target_min, target_max, self.y_min, self.y_max)
+                
+                # Denormalizzazione Predizioni
+                pred_train_denorm = denormalize(y_pred_train, target_min, target_max, self.y_min, self.y_max)
+                pred_val_denorm = denormalize(y_pred_val, target_min, target_max, self.y_min, self.y_max)
                 pred_test_denorm = denormalize(y_pred_test, target_min, target_max, self.y_min, self.y_max)
                 
-                # 2. Calcolo MEE su dati denormalizzati
+                # Calcolo MEE reale
                 train_mee = net.compute_mee(y_train_denorm, pred_train_denorm)
                 val_mee = net.compute_mee(y_val_denorm, pred_val_denorm)
                 test_mee = net.compute_mee(y_test_denorm, pred_test_denorm)
                 
-                # 3. Salva nei risultati
                 results['train_mee'] = train_mee
                 results['val_mee'] = val_mee
                 results['test_mee'] = test_mee
@@ -124,112 +123,129 @@ class CascadeGridSearch:
             
         except Exception as e:
             print(f"Errore: {e}")
+            import traceback
+            traceback.print_exc()
             return None, None
 
     def coarse_grid_search(self):
-        print("INIZIO GRID SEARCH")
+        print("INIZIO COARSE SEARCH CASCADE")
 
-        # PARAMETRI FISSI PER TUTTE LE COMBINAZIONI
-        fixed_max_units = 10 if 'monk' in self.dataset_name else 25 
-        fixed_patience = 40
-        fixed_tolerance = 1e-4 # Molto bassa per forzare l'early stopping
-        fixed_epochs = 1000 
-
-        # DEFINIZIONE GRIGLIA SPECIFICA PER DATASET
         if self.dataset_name == 'cup':
-            # CUP: Problema di regressione complesso. 
-            # Serve regolarizzazione (L2) e learning rate medio-bassi.
             param_grid = {
-                'learning_rate': [0.001, 0.005, 0.01],  
-                'l2_lambda': [1e-4, 1e-3, 1e-2],       
-                'algorithm': ['sgd', 'quickprop'],      
-                'momentum': [0.5, 0.9] if 'sgd' in ['sgd'] else [0.0], # Momentum solo se usi SGD vanilla
-                'mu': [1.75], 
-                'eta_plus': [1.2],
-                'eta_minus': [0.5]
+                'learning_rate': [0.005, 0.01, 0.02], # LR più bassi per precisione
+                'patience': [50, 80],                 # Più pazienza
+                'tolerance': [0.001, 0.0005],         # Tolleranza più stretta
+                'max_hidden_units': [5, 10, 15],      # Più neuroni per complessità
+                'algorithm': ['rprop', 'quickprop'],  # Rprop spesso va meglio su regressione
+                'epochs': [1000],
+                'l2_lambda': [0.0001, 0.001]          # Regolarizzazione importante
             }
-        
-        elif self.dataset_name in ['monk1', 'monk2']:
-            # MONK1/2
-            param_grid = {
-                'learning_rate': [0.005, 0.01],   
-                'l2_lambda': [0.0, 1e-6],               
-                'algorithm': ['quickprop', 'rprop'],    
-                'mu': [1.75],       
-                'eta_plus': [1.2],  
-                'eta_minus': [0.5], 
-                'momentum': [0.0],
-                'max_hidden_units': [1, 2],
-                'patience': [20, 25]
-            }
-            
-        else: 
-            # MONK3: Ha rumore (5%), serve un minimo di regolarizzazione
-            param_grid = {
-                'learning_rate': [0.005, 0.01],
-                'l2_lambda': [1e-4, 1e-3], 
+        elif self.dataset_name == 'monk3':
+           param_grid = {
+                'learning_rate': [0.1, 0.2],
+                'patience': [30, 40],       
+                'tolerance': [0.01, 0.02],  
+                'max_hidden_units': [2, 3, 4], 
                 'algorithm': ['quickprop'],
-                'mu': [1.75],
-                'eta_plus': [1.2],
-                'eta_minus': [0.5],
-                'momentum': [0.0]
+                'l2_lambda': [0.01, 0.001], 
+                'epochs': [1000]
             }
-
-        all_combinations = []
-        import itertools
-        keys = list(param_grid.keys())
-        for values in itertools.product(*param_grid.values()):
-            params = dict(zip(keys, values))
-            
-            # Aggiungi i parametri fissi che abbiamo tolto dalla griglia
-            # params['patience'] = fixed_patience
-            params['tolerance'] = fixed_tolerance
-            # params['max_hidden_units'] = fixed_max_units
-            params['epochs'] = fixed_epochs
-
-            # Regole di esclusione per evitare combinazioni inutili
-            if params['algorithm'] == 'sgd':
-                # SGD non usa mu, eta_plus, eta_minus
-                if 'mu' in params: del params['mu'] 
-                # SGD ha bisogno di momentum, gli altri no
-            elif params['algorithm'] == 'quickprop':
-                if params.get('momentum', 0) > 0: continue 
-                params['eta_plus'] = 0 # Non usati
-                params['eta_minus'] = 0
-            elif params['algorithm'] == 'rprop':
-                if params.get('momentum', 0) > 0: continue
-                params['mu'] = 0
-
-            if params not in all_combinations:
-                all_combinations.append(params)
-
-        print(f"Numero totale di combinazioni ottimizzate: {len(all_combinations)}")
+        elif self.dataset_name == 'monk1' or self.dataset_name == 'monk2':
+             param_grid = {
+                'learning_rate': [0.1, 0.2],          # LR più alti
+                'patience': [30],
+                'tolerance': [0.01],
+                'max_hidden_units': [2, 3],           
+                'algorithm': ['quickprop'],           # Quickprop vola sui Monk
+                'epochs': [1000],
+                'l2_lambda': [0.0001]                 # Regolarizzazione minima
+            }
         
+        all_combinations = []
+        for combo in itertools.product(*param_grid.values()):
+            params = dict(zip(param_grid.keys(), combo))
+            
+            # Logica correzione parametri (SGD/Momentum)
+            if params['algorithm'] == 'sgd' and params.get('momentum', 0.0) == 0.0:
+                params['mu'] = 1.75
+                all_combinations.append(params)
+            elif params['algorithm'] in ['rprop', 'quickprop']:
+                params['momentum'] = 0.0
+                all_combinations.append(params)
+        
+        print(f"Numero totale di combinazioni: {len(all_combinations)}")
+        print(f"Sto utilizzando tutti i core disponibili del processore Ryzen 5 3500U...")
+        
+        shared_data = (
+            self.X_train, self.y_train, 
+            self.X_val, self.y_val, 
+            self.X_test, self.y_test
+        )
+        
+        def process_single_combination(params, data_pack):
+            # spacchetta i dati condivisi
+            X_tr, y_tr, X_v, y_v, X_te, y_te = data_pack
+            
+            # Crea istanza
+            searcher = CascadeGridSearch(self.dataset_name)
+            
+            # SOVRASCRIVI i dati con quelli fissati dal main process
+            # (Ignoriamo quelli caricati nel __init__ del worker)
+            searcher.X_train, searcher.y_train = X_tr, y_tr
+            searcher.X_val, searcher.y_val = X_v, y_v
+            searcher.X_test, searcher.y_test = X_te, y_te
+            
+            # Disabilita stampe
+            import sys, os
+            original_stdout = sys.stdout
+            sys.stdout = open(os.devnull, 'w')
+            try:
+                results, _ = searcher.train_evaluate(params)
+            finally:
+                sys.stdout.close()
+                sys.stdout = original_stdout
+            
+            return (params, results)
+        
+        # Passiamo 'shared_data' a ogni job
+        all_results_raw = Parallel(n_jobs=-1, verbose=10)(
+            delayed(process_single_combination)(p, shared_data) for p in all_combinations
+        )
+        
+        all_results = [res for res in all_results_raw if res[1] is not None]
+        
+        # ... (Il resto del codice per ordinare e stampare rimane uguale) ...
+        # RICERCA DEL MIGLIORE
         best_score = float('inf')
         best_params = None
-        all_results = []
         
-        for i, params in enumerate(tqdm(all_combinations, desc="Smart Grid Search")):
-            results, _ = self.train_evaluate(params)
-            
-            if results is not None:
-                all_results.append((params, results))
-                
-                # Per MONK usiamo Accuracy, per CUP usiamo Loss
-                if self.dataset_name == 'cup':
-                    current_score = results['min_val_loss']
-                else:
-                    current_score = results['min_val_loss'] 
-                
-                if current_score < best_score:
-                    best_score = current_score
-                    best_params = params.copy()
-
-        return best_params, all_results[:5]
+        for params, results in all_results:
+            current_score = results['min_val_loss']
+            if current_score < best_score:
+                best_score = current_score
+                best_params = params.copy()
+        
+        print("\n" + "="*80)
+        print("MIGLIORI RISULTATI COARSE GRID SEARCH")
+        print("="*80)
+        
+        all_results.sort(key=lambda x: x[1]['min_val_loss'])
+        top_n = min(5, len(all_results))
+        
+        for i, (params, results) in enumerate(all_results[:top_n]):
+            print(f"\nPosizione {i+1}:")
+            print(f"Validation Loss (MSE Norm): {results['min_val_loss']:.6f}")
+            if self.dataset_name == 'cup':
+                 print(f"Validation MEE (Original):  {results['val_mee']:.6f}")
+            elif self.dataset_name in ['monk1', 'monk2', 'monk3']:
+                print(f"Test Accuracy: {results['test_accuracy']:.4f}")
+            print(f"Parametri: {params}")
+        
+        return best_params, all_results[:top_n]
 
     def fine_grid_search(self, best_params, top_results):
         print("INIZIO FINE SEARCH CASCADE")
-    
+        
         fine_tuning_grid = {
             'learning_rate': [best_params['learning_rate']*0.8, best_params['learning_rate'], best_params['learning_rate']*1.2],
             'patience': [best_params['patience'] - 10, best_params['patience'], best_params['patience'] + 10],
@@ -237,11 +253,9 @@ class CascadeGridSearch:
             'max_hidden_units': [best_params['max_hidden_units']] 
         }
         
-        # Aggiungi parametri specifici dell'algoritmo
         if best_params['algorithm'] == 'rprop':
             ep = best_params.get('eta_plus', 1.2)
             em = best_params.get('eta_minus', 0.5)
-            
             fine_tuning_grid['eta_plus'] = [ep - 0.1, ep, ep + 0.1]
             fine_tuning_grid['eta_minus'] = [em - 0.1, em, em + 0.1]
             
@@ -249,7 +263,6 @@ class CascadeGridSearch:
             current_mu = best_params.get('mu', 1.75)
             fine_tuning_grid['mu'] = [current_mu - 0.25, current_mu, current_mu + 0.25]   
         
-        # Mantieni gli altri parametri fissi
         fixed_params = {
             'epochs': best_params['epochs'],
             'algorithm': best_params['algorithm'],
@@ -258,7 +271,6 @@ class CascadeGridSearch:
             'momentum': best_params.get('momentum', 0.0),
         }
         
-        # Genera tutte le combinazioni
         all_combinations = []
         keys = list(fine_tuning_grid.keys())
         values = list(fine_tuning_grid.values())
@@ -275,7 +287,6 @@ class CascadeGridSearch:
         best_fine_params = None
         fine_results = []
         
-        # Esegui la grid search di raffinamento
         for params in tqdm(all_combinations, desc="Fine Grid Search"):
             results, _ = self.train_evaluate(params)
             
@@ -291,95 +302,82 @@ class CascadeGridSearch:
         print("MIGLIORI RISULTATI FINE GRID SEARCH")
         print("="*80)
         
-        # Ordina i risultati
         fine_results.sort(key=lambda x: x[1]['min_val_loss'])
         
         for i, (params, results) in enumerate(fine_results[:3]):
             print(f"\nPosizione {i+1}:")
-            print(f"Validation Loss: {results['min_val_loss']:.6f}")
-            if self.dataset_name in ['monk1', 'monk2', 'monk3']:
+            print(f"Validation Loss (MSE Norm): {results['min_val_loss']:.6f}")
+            if self.dataset_name == 'cup':
+                 print(f"Validation MEE (Original):  {results['val_mee']:.6f}")
+            elif self.dataset_name in ['monk1', 'monk2', 'monk3']:
                 print(f"Test Accuracy: {results['test_accuracy']:.4f}")
-                print(f"Train Accuracy: {results['train_accuracy']:.4f}")
             print(f"Parametri: {params}")
         
         return best_fine_params, fine_results[0]
     
-    def plot_results(self, history, params, final_results):
-        """
-        Genera i grafici appropriati in base al dataset (MONK vs CUP).
-        """
-        # Creiamo una cartella per i plot se non esiste
-        import os
-        if not os.path.exists('plots_cascade'):
-            os.makedirs('plots_cascade')
+    def plot_results(self, history, best_params, results):
+        fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+        
+        training_loss = []
+        validation_loss = []
             
-        # Nome base per i file
-        filename_base = f"plots_cascade/{self.dataset_name}_{params['algorithm']}_eta{params['learning_rate']}_l2{params.get('l2_lambda', 0)}"
+        if isinstance(history, dict):
+            training_loss = history.get('train', [])
+            validation_loss = history.get('val', [])
+        elif isinstance(history, (list, np.ndarray)):
+            training_loss = history
         
-        # GRAFICO LOSS (valido per entrambi i dataset)
-        plt.figure(figsize=(10, 6))
-        plt.plot(history['train_loss'], label='Training Loss', color='blue', linewidth=2)
-        plt.plot(history['val_loss'], label='Validation Loss', color='orange', linewidth=2, linestyle='--')
+        # Plot Loss
+        axes[0].plot(training_loss, label='Training Loss', alpha=0.7)
+        if len(validation_loss) > 0:
+            axes[0].plot(validation_loss, label='Validation Loss', color='orange', linestyle='--', alpha=0.7)
+        axes[0].set_xlabel('Epoche')
+        axes[0].set_ylabel('Loss (MSE Normalized)')
+        axes[0].set_title(f'Learning Curve - {self.dataset_name}')
+        axes[0].legend()
+        axes[0].grid(True, alpha=0.3)
+        axes[0].set_yscale('log') # Log scale per vedere meglio la discesa
         
-        plt.title(f'Learning Curve (Loss) - {self.dataset_name.upper()}\nParams: {params}')
-        plt.xlabel('Epochs')
-        plt.ylabel('Loss (MSE)')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.yscale('log') 
-        plt.savefig(f"{filename_base}_loss.png")
-        plt.close()
-        
-        # GRAFICI SPECIFICI PER DATASET
+        # Bar Plot Metriche
         if self.dataset_name in ['monk1', 'monk2', 'monk3']:
-            # PER MONK: Stampiamo l'ACCURACY
-            if 'train_acc' in history and 'val_acc' in history:
-                plt.figure(figsize=(10, 6))
-                plt.plot(history['train_acc'], label='Training Accuracy', color='green')
-                plt.plot(history['val_acc'], label='Validation Accuracy', color='red', linestyle='--')
-                
-                plt.title(f'Accuracy Curve - {self.dataset_name.upper()}')
-                plt.xlabel('Epochs')
-                plt.ylabel('Accuracy')
-                plt.legend()
-                plt.grid(True)
-                plt.ylim(0, 1.05)
-                plt.savefig(f"{filename_base}_accuracy.png")
-                plt.close()
-                
+            metrics = ['Train Acc', 'Val Acc', 'Test Acc']
+            values = [results.get('train_accuracy', 0), results.get('val_accuracy', 0), results.get('test_accuracy', 0)]
+            title = 'Accuracy Finale'
+            ylim = [0, 1.1]
         else:
-            # PER CUP: Stampiamo MEE e SCATTER PLOT
-            if 'train_mee' in history and 'val_mee' in history:
-                plt.figure(figsize=(10, 6))
-                plt.plot(history['train_mee'], label='Training MEE', color='purple')
-                plt.plot(history['val_mee'], label='Validation MEE', color='brown', linestyle='--')
-                plt.title(f'MEE Curve - CUP')
-                plt.xlabel('Epochs')
-                plt.ylabel('Mean Euclidean Error')
-                plt.legend()
-                plt.grid(True)
-                plt.savefig(f"{filename_base}_mee.png")
-                plt.close()
-                
-            pass
+            # Per CUP mostriamo il MEE
+            metrics = ['Train MEE', 'Val MEE', 'Test MEE']
+            values = [results.get('train_mee', 0), results.get('val_mee', 0), results.get('test_mee', 0)]
+            title = 'MEE Finale (Original Scale)'
+            ylim = None
+            
+        bars = axes[1].bar(metrics, values, color=['blue', 'green', 'red'])
+        axes[1].set_title(title)
+        if ylim: axes[1].set_ylim(ylim)
         
+        for bar, value in zip(bars, values):
+            height = bar.get_height()
+            axes[1].text(bar.get_x() + bar.get_width()/2., height,
+                        f'{value:.4f}', ha='center', va='bottom')
+        
+        plt.tight_layout()
+        filename = f'cascade_results_{self.dataset_name}.png'
+        plt.savefig(filename, dpi=150, bbox_inches='tight')
+        print(f"\nGrafico salvato come: {filename}")
+    
     def run(self):
-        #esegue la grid search completa
         print(f"\n{'='*80}")
         print(f"GRID SEARCH PER DATASET: {self.dataset_name.upper()}")
         print(f"{'='*80}\n")
         
-        # Grid search grossolana
         best_coarse_params, top_results = self.coarse_grid_search()
         
         if not best_coarse_params:
             print("Errore: nessun risultato valido dalla grid search")
             return
         
-        # Grid search con raffinamento
         best_fine_params, (final_params, final_results) = self.fine_grid_search(best_coarse_params, top_results)
         
-        #  Addestra il modello finale con i migliori parametri
         print("\n" + "="*80)
         print("ADDESTRAMENTO FINALE CON I MIGLIORI PARAMETRI")
         print("="*80)
@@ -395,36 +393,30 @@ class CascadeGridSearch:
                 print(f"  Training Accuracy:   {final_results['train_accuracy']:.4f}")
                 print(f"  Validation Accuracy: {final_results['val_accuracy']:.4f}")
                 print(f"  Test Accuracy:       {final_results['test_accuracy']:.4f}")
-                print(f"  Training Loss:       {final_results['train_loss']:.6f}")
-                print(f"  Validation Loss:     {final_results['val_loss']:.6f}")
-                print(f"  Test Loss:           {final_results['test_loss']:.6f}")
-                print(f"  Min Validation Loss: {final_results['min_val_loss']:.6f}")
             else:
-                print(f"  Training Loss (MSE): {final_results['train_loss']:.6f}")
-                print(f"  Validation MEE:      {final_results.get('val_mee', 0):.6f}") 
-                print(f"  Test MEE:            {final_results.get('test_mee', 0):.6f}") 
-                print(f"  Training MEE:        {final_results.get('train_mee', 0):.6f}")
+                print(f"  Training Loss (MSE Norm): {final_results['train_loss']:.6f}")
+                print(f"  Training MEE (Original):  {final_results['train_mee']:.6f}")
+                print(f"  Validation MEE (Original):{final_results['val_mee']:.6f}")
+                print(f"  Test MEE (Original):      {final_results['test_mee']:.6f}")
             
-            # Crea e mostra i grafici
             self.plot_results(final_results['history'], final_params, final_results)
         
         return final_params, final_results, final_model
 
-
 def main():
-    # Scegli il dataset da usare
-    # Opzioni: 'monk1', 'monk2', 'monk3', 'cup'
-    # dataset_name = 'monk1'  # Cambia questo per testare dataset diversi
-    
-    # Crea e esegui la grid search
+    # Lista di tutti i dataset su cui vuoi fare la grid search
     datasets = ['monk1', 'monk2', 'monk3', 'cup']
+    
     for dataset in datasets:
         print(f"\n\n{'#'*80}")
         print(f"ESECUZIONE PER DATASET: {dataset}")
         print(f"{'#'*80}")
-        grid_search = CascadeGridSearch(dataset_name=dataset)
-        grid_search.run()
-
+        try:
+            grid_search = CascadeGridSearch(dataset_name=dataset)
+            grid_search.run()
+        except Exception as e:
+            print(f"Errore durante l'esecuzione su {dataset}: {e}")
+            continue # Passa al prossimo dataset anche se uno fallisce
 
 if __name__ == "__main__":
     main()
