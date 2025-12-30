@@ -21,10 +21,10 @@ def smooth_curve(values, weight=0.9):
     return smoothed
 
 
-def _cup_test(learning_rate, seed, l2_lambda=0.0001, momentum=0.9, hidden_units=50, verbose=False):
+def _cup_test(learning_rate, seed, l2_lambda=0.0001, momentum=0.9, network_structure=[12, 50, 4], verbose=False):
     
     if verbose:
-        print(f" LR: {learning_rate}, L2: {l2_lambda}, Momentum: {momentum}, Hidden: {hidden_units}")
+        print(f" LR: {learning_rate}, L2: {l2_lambda}, Momentum: {momentum}, Architecture {network_structure}")
     
     np.random.seed(seed)
     
@@ -50,7 +50,7 @@ def _cup_test(learning_rate, seed, l2_lambda=0.0001, momentum=0.9, hidden_units=
     y_test_norm = normalize(y_test, -1, 1, y_min, y_max)
     
     params = {
-        'network_structure': [12, hidden_units, 4], 
+        'network_structure': network_structure, 
         'eta': learning_rate,
         'l2_lambda': l2_lambda,
         'momentum': momentum,
@@ -139,7 +139,7 @@ def _cup_test(learning_rate, seed, l2_lambda=0.0001, momentum=0.9, hidden_units=
         'lr': learning_rate,
         'l2_lambda': l2_lambda,
         'momentum': momentum,
-        'hidden_units': hidden_units,
+        'network_structure': network_structure,
         'seed': seed,
         'normalization': (x_min, x_max, y_min, y_max),
         'data':  (X_train, y_train, X_val, y_val, X_test, y_test)
@@ -149,14 +149,21 @@ def grid_search_cup(n_seeds_per_config=3):
     learning_rates = [0.005, 0.001, 0.002]
     l2_lambdas = [0.00005, 0.0001, 0.0005]
     momentums = [0.9, 0.95]
-    hidden_units_list=[40, 60, 80]
+    architectures = [
+        [12, 60, 4],          
+        [12, 80, 4],         
+        [12, 50, 30, 4],      
+        [12, 60, 40, 4],      
+        [12, 80, 60, 4],     
+        [12, 60, 40, 20, 4],  
+    ]
 
     best_val_mee = float('inf')
     best_results = None
     all_results = []
     
     total_runs = (len(learning_rates) * len(l2_lambdas) * len(momentums) * 
-                 len(hidden_units_list) * n_seeds_per_config)
+                 len(architectures) * n_seeds_per_config)
     current_run = 0
     
     print(f"\n{'#'*70}")
@@ -166,27 +173,32 @@ def grid_search_cup(n_seeds_per_config=3):
     for lr in learning_rates:
         for l2 in l2_lambdas: 
             for mom in momentums:
-                for hidden in hidden_units_list:
+                for arch in architectures: 
                     print(f"\n{'='*70}")
-                    print(f" TESTING LR={lr}, L2={l2}, Mom={mom}, Hidden={hidden}")
+                    print(f"  LR={lr}, L2={l2}, Mom={mom}, Arch={arch}")
                     print(f"{'='*70}")
                     
                     for seed_idx in range(n_seeds_per_config):
                         current_run += 1
-                        seed = seed_idx * 42 + int(lr * 10000) + int(l2 * 100000) + int(mom * 100) + hidden
+                        seed = seed_idx * 42 + int(lr * 10000) + int(l2 * 100000) + int(mom * 100) + sum(arch)
                         
-                        print(f"\n Run {current_run}/{total_runs} - LR={lr}, L2={l2}, Mom={mom}, "
-                              f"Hidden={hidden}, Seed={seed}", end=" → ")
+                        print(f"  Run {current_run}/{total_runs}", end=" → ") 
                         try:
-                            results = _cup_test(learning_rate=lr, seed=seed, l2_lambda=l2, 
-                                               momentum=mom, hidden_units=hidden, verbose=False)
+                            results = _cup_test(
+                                learning_rate=lr, 
+                                seed=seed, 
+                                l2_lambda=l2, 
+                                momentum=mom, 
+                                network_structure=arch,  # ← AGGIUNGI arch
+                                verbose=False
+                            )
                             all_results.append(results)
-                            print(f"Val MEE: {results['val_mee']:.4f}")
+                            print(f"Val MEE:  {results['val_mee']:.4f}")
                             
                             if results['val_mee'] < best_val_mee:
                                 best_val_mee = results['val_mee']
                                 best_results = results
-                                print(f"   NUOVO BEST VAL MEE: {best_val_mee:.4f}")
+                                print(f"      ⭐ BEST:  {best_val_mee:. 4f}")
                         except Exception as e:
                             print(f"Error: {str(e)[:40]}")
                             continue
@@ -199,50 +211,46 @@ def grid_search_cup(n_seeds_per_config=3):
     print(f"Best LR:         {best_results['lr']}")
     print(f"Best L2:         {best_results['l2_lambda']}")
     print(f"Best Momentum:    {best_results['momentum']}")
-    print(f"Best Hidden:     {best_results['hidden_units']}")
+    print(f"Architecture:     {best_results['network_structure']}")
     print(f"Best Seed:       {best_results['seed']}")
     
     return best_results, all_results
 
+def retrain_with_loss_tracking(best_results):
 
-def retrain_and_track_errors(best_results):
-    """
-    Ri-addestra il modello migliore tracciando MEE ad ogni epoca
-    """
     print(f"\n{'='*70}")
-    print(f" RI-ADDESTRAMENTO CON TRACKING DEGLI ERRORI")
+    print(f" RI-ADDESTRAMENTO CON TRACKING LOSS")
     print(f"{'='*70}")
-    print(f"LR: {best_results['lr']}, L2: {best_results['l2_lambda']}, "
-          f"Hidden: {best_results['hidden_units']}, Seed: {best_results['seed']}")
+    print(f"LR:  {best_results['lr']}, L2: {best_results['l2_lambda']}, "
+          f"Architecture: {best_results['network_structure']}, Seed: {best_results['seed']}")
     
-    # Recupera i dati
+   
     X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
     x_min, x_max, y_min, y_max = best_results['normalization']
     
-    # Normalizza
+    
     X_train_norm = normalize(X_train, 0, 1, x_min, x_max)
     X_val_norm = normalize(X_val, 0, 1, x_min, x_max)
     y_train_norm = normalize(y_train, -1, 1, y_min, y_max)
     y_val_norm = normalize(y_val, -1, 1, y_min, y_max)
     
-    # Seed per riproducibilità
-    np.random.seed(best_results['seed'])
+    np. random.seed(best_results['seed'])
     
-    # Ricrea la rete
+    # Ricrea rete
     params = best_results['params'].copy()
     net = NeuralNetwork(**params)
     
-    # Training manuale con tracking
-    train_mee_history = []
-    val_mee_history = []
+    # Training manuale epoch-by-epoch
+    train_loss_history = []
+    val_loss_history = []
     
-    epochs = 1500
-    batch_size = 32
-    patience = 150
-    best_val_mee = float('inf')
+    epochs = 2000
+    batch_size = 16
+    patience = 300
+    best_val_loss = float('inf')
     patience_counter = 0
     
-    print(f"\nAddestramento in corso (tracking MEE ad ogni epoca)...")
+    print(f"\n Training in corso (max {epochs} epochs)...")
     
     for epoch in range(epochs):
         try:
@@ -254,38 +262,112 @@ def retrain_and_track_errors(best_results):
                        epochs=epochs, batch_size=batch_size, patience=patience, verbose=False)
             break
         
-        # Calcola MEE
+        # Calcola LOSS (Half MSE normalizzata)
         train_pred_norm = net.predict(X_train_norm)
+        train_loss = 0.5 * np. mean((train_pred_norm - y_train_norm) ** 2)
+        
         val_pred_norm = net.predict(X_val_norm)
+        val_loss = 0.5 * np.mean((val_pred_norm - y_val_norm) ** 2)
         
-        train_pred = denormalize(train_pred_norm, -1, 1, y_min, y_max)
-        val_pred = denormalize(val_pred_norm, -1, 1, y_min, y_max)
-        
-        train_mee = MEE(y_train, train_pred)
-        val_mee = MEE(y_val, val_pred)
-        
-        train_mee_history.append(train_mee)
-        val_mee_history.append(val_mee)
+        train_loss_history. append(train_loss)
+        val_loss_history.append(val_loss)
         
         # Early stopping
-        if val_mee < best_val_mee:
-            best_val_mee = val_mee
+        if val_loss < best_val_loss: 
+            best_val_loss = val_loss
+            patience_counter = 0
+        else: 
+            patience_counter += 1
+        
+        if patience_counter >= patience:
+            print(f"\n Early stopping at epoch {epoch+1}")
+            break
+        
+        if (epoch + 1) % 200 == 0:
+            print(f"  Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
+    
+    print(f"\n Training completato dopo {len(train_loss_history)} epoche")
+    print(f"   Final Train Loss: {train_loss_history[-1]:.6f}")
+    print(f"   Final Val Loss:   {val_loss_history[-1]:.6f}")
+    
+    return train_loss_history, val_loss_history, net
+
+def retrain_with_loss_tracking(best_results):
+    """
+    Ri-addestra il modello migliore tracciando LOSS (Half MSE) ad ogni epoca
+    """
+    print(f"\n{'='*70}")
+    print(f" RI-ADDESTRAMENTO CON TRACKING LOSS")
+    print(f"{'='*70}")
+    print(f"LR:  {best_results['lr']}, L2: {best_results['l2_lambda']}, "
+          f"Hidden: {best_results['hidden_units']}, Seed: {best_results['seed']}")
+    
+    X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
+    x_min, x_max, y_min, y_max = best_results['normalization']
+    
+    X_train_norm = normalize(X_train, 0, 1, x_min, x_max)
+    X_val_norm = normalize(X_val, 0, 1, x_min, x_max)
+    y_train_norm = normalize(y_train, -1, 1, y_min, y_max)
+    y_val_norm = normalize(y_val, -1, 1, y_min, y_max)
+    
+    np.random.seed(best_results['seed'])
+    
+    params = best_results['params'].copy()
+    net = NeuralNetwork(**params)
+    
+    # Training manuale epoch-by-epoch
+    train_loss_history = []
+    val_loss_history = []
+    
+    epochs = 2000
+    batch_size = 16
+    patience = 300
+    best_val_loss = float('inf')
+    patience_counter = 0
+    
+    print(f"\n Training in corso (max {epochs} epochs)...")
+    
+    for epoch in range(epochs):
+        try:
+            net.fit(X_train_norm, y_train_norm, X_val_norm, y_val_norm, 
+                   epochs=1, batch_size=batch_size, verbose=False)
+        except: 
+            if epoch == 0:
+                # Fallback:  training completo se fit(epochs=1) non funziona
+                net.fit(X_train_norm, y_train_norm, X_val_norm, y_val_norm, 
+                       epochs=epochs, batch_size=batch_size, patience=patience, verbose=False)
+            break
+        
+        # Calcola LOSS (Half MSE normalizzata)
+        train_pred_norm = net.predict(X_train_norm)
+        train_loss = 0.5 * np.mean((train_pred_norm - y_train_norm) ** 2)
+        
+        val_pred_norm = net.predict(X_val_norm)
+        val_loss = 0.5 * np.mean((val_pred_norm - y_val_norm) ** 2)
+        
+        train_loss_history.append(train_loss)
+        val_loss_history.append(val_loss)
+        
+        # Early stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
             patience_counter = 0
         else:
             patience_counter += 1
         
         if patience_counter >= patience:
-            print(f"\nEarly stopping at epoch {epoch+1}")
+            print(f"\n  Early stopping at epoch {epoch+1}")
             break
         
-        if (epoch + 1) % 100 == 0:
-            print(f"Epoca {epoch+1}/{epochs} - Train MEE: {train_mee:.4f}, Val MEE:  {val_mee:.4f}")
+        # Progress ogni 200 epoche
+        if (epoch + 1) % 200 == 0:
+            print(f"  Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
     
-    print(f"\n Training completato dopo {len(train_mee_history)} epoche")
-    print(f"Final Train MEE: {train_mee_history[-1]:.4f}")
-    print(f"Final Val MEE:     {val_mee_history[-1]:.4f}")
+    print(f"\n Training completato dopo {len(train_loss_history)} epoche")
+    print(f"   Final Train Loss: {train_loss_history[-1]:.6f}")
+    print(f"   Final Val Loss:    {val_loss_history[-1]:.6f}")
     
-    return train_mee_history, val_mee_history, net
+    return train_loss_history, val_loss_history, net
 
 
 def evaluate_on_test_set(net, X_test, y_test, normalization):
@@ -404,17 +486,17 @@ def plot_results(train_results, train_mee_history, val_mee_history, test_results
     print(f"\n Grafico salvato in: {save_path}")
     plt.show()
 
-def plot_loss_vs_epochs(best_results, save_path='cup_loss_vs_epochs.png'):
-    
+def plot_loss_history(train_loss_history, val_loss_history, best_results, 
+                     save_path='cup_loss_vs_epochs.png'):
+    """
+    Crea grafico Loss vs Epochs (come MONK-1/2/3)
+    """
     print(f"\n{'='*70}")
-    print(f"📊 CREAZIONE GRAFICO LOSS VS EPOCHS")
+    print(f" CREAZIONE GRAFICO LOSS VS EPOCHS")
     print(f"{'='*70}")
     
-    train_loss_history = best_results. get('train_loss_history', [])
-    val_loss_history = best_results.get('val_loss_history', [])
-    
     if len(train_loss_history) == 0 or len(val_loss_history) == 0:
-        print("⚠️  Nessuna history disponibile!")
+        print(" Nessuna history disponibile!")
         return
     
     epochs = range(1, len(train_loss_history) + 1)
@@ -441,23 +523,23 @@ def plot_loss_vs_epochs(best_results, save_path='cup_loss_vs_epochs.png'):
     ax.plot(epochs, val_smooth, label='Validation Loss', 
            color='#E74C3C', linewidth=2)
     
-    # OPTIMAL EPOCH (minimo validation loss)
+    # OPTIMAL EPOCH
     min_val_idx = np.argmin(val_smooth)
     optimal_epoch = min_val_idx + 1
     optimal_loss = val_smooth[min_val_idx]
     
     ax.axvline(x=optimal_epoch, color='green', linestyle=':', 
-              linewidth=2.5, alpha=0.7, label=f'Optimal:  {optimal_epoch} epochs')
+              linewidth=2.5, alpha=0.7, label=f'Optimal: {optimal_epoch} epochs')
     
     ax.scatter([optimal_epoch], [optimal_loss], color='gold', 
               s=400, marker='*', zorder=11, edgecolors='darkgreen', linewidths=3)
     
     # FORMATTING
     ax.set_xlabel('Epochs', fontsize=13, fontweight='bold')
-    ax.set_ylabel('Half MSE Loss', fontsize=13, fontweight='bold')
+    ax.set_ylabel('Half MSE Loss (normalized)', fontsize=13, fontweight='bold')
     ax.set_title(f'Training and Validation Loss vs Epochs - CUP\n'
                 f'(LR={best_results["lr"]}, L2={best_results["l2_lambda"]}, '
-                f'Hidden={best_results["hidden_units"]})', 
+                f'Architecture={best_results["network_structure"]})', 
                 fontsize=14, fontweight='bold', pad=15)
     ax.legend(fontsize=11, loc='upper right', framealpha=0.95, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
@@ -474,8 +556,67 @@ def plot_loss_vs_epochs(best_results, save_path='cup_loss_vs_epochs.png'):
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     print(f"\n Grafico salvato in: {save_path}")
     plt.show()
+
+def plot_predictions_vs_actual(best_results, test_results, save_path='cup_predictions_vs_actual.png'):
+    """
+    Crea un grafico 2x2 con predizioni vs valori reali per tutti i 4 target
+    """
+    print(f"\n{'='*70}")
+    print(f"📊 CREAZIONE GRAFICO PREDIZIONI VS VALORI REALI")
+    print(f"{'='*70}")
     
-if __name__ == "__main__": 
+    X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
+    predictions = test_results['predictions']
+    
+    # Grafico 2x2 (4 target)
+    fig, axes = plt.subplots(2, 2, figsize=(14, 12))
+    axes = axes.flatten()
+    
+    target_names = ['Target 1 (x)', 'Target 2 (y)', 'Target 3 (z1)', 'Target 4 (z2)']
+    
+    for i in range(4):
+        ax = axes[i]
+        
+        # Scatter plot
+        ax.scatter(y_test[:, i], predictions[: , i], 
+                  alpha=0.6, s=50, edgecolors='black', linewidth=0.5, 
+                  color='#3498db', label='Predictions')
+        
+        # Linea ideale (y=x)
+        min_val = min(y_test[:, i].min(), predictions[:, i].min())
+        max_val = max(y_test[:, i].max(), predictions[:, i].max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2.5, label='Perfect prediction', alpha=0.8)
+        
+        # Calcola errore per questo target
+        target_mee = np.mean(np.sqrt(np.sum((y_test[:, i] - predictions[:, i])**2)))
+        
+        # Formatting
+        ax.set_xlabel(f'True Values - {target_names[i]}', fontsize=12, fontweight='bold')
+        ax.set_ylabel(f'Predicted Values - {target_names[i]}', fontsize=12, fontweight='bold')
+        ax.set_title(f'{target_names[i]}\nMEE: {target_mee:.4f}', 
+                    fontsize=13, fontweight='bold')
+        ax.legend(fontsize=10, loc='upper left')
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # Imposta limiti uguali per x e y (quadrato)
+        all_vals = np.concatenate([y_test[:, i], predictions[:, i]])
+        margin = (all_vals.max() - all_vals.min()) * 0.05
+        ax.set_xlim(all_vals.min() - margin, all_vals.max() + margin)
+        ax.set_ylim(all_vals. min() - margin, all_vals.max() + margin)
+        ax.set_aspect('equal', 'box')
+    
+    
+    arch_str = '-'.join(map(str, best_results['network_structure']))
+    fig.suptitle(f'Predictions vs True Values - CUP Test Set\n'
+                f'(Arch={arch_str}, MEE={test_results["test_mee"]:.4f})', 
+                fontsize=16, fontweight='bold', y=0.995)
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.985])
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    print(f"\n Grafico salvato in: {save_path}")
+    plt.show()  
+
+if __name__ == "__main__":  
     try:
         print("="*70)
         print(" CUP - REGRESSIONE")
@@ -485,37 +626,47 @@ if __name__ == "__main__":
         print("\n FASE 1: Grid Search")
         best_results, all_results = grid_search_cup(n_seeds_per_config=3)
         
-        # ← AGGIUNGI QUESTO DEBUG: 
-        print(f"\n DEBUG best_results keys: {best_results.keys()}")
-        print(f" train_loss_history length: {len(best_results. get('train_loss_history', []))}")
-        print(f" val_loss_history length: {len(best_results.get('val_loss_history', []))}")
-
-        if len(best_results. get('train_loss_history', [])) > 0:
-            print(f" train_loss_history primi 5: {best_results['train_loss_history'][:5]}")
+        print(f"\n RISULTATI GRID SEARCH:")
+        print(f"  Train MEE: {best_results['train_mee']:.4f}")
+        print(f"  Val MEE:    {best_results['val_mee']:.4f}")
+        print(f"  Best LR:   {best_results['lr']}")
+        print(f"  Best L2:   {best_results['l2_lambda']}")
+        print(f"  Best Mom:  {best_results['momentum']}")
+        print(f"  Best Arch: {best_results['network_structure']}")
         
-        # FASE 2: Grafico Loss vs Epochs
-        print(f"\n FASE 2: Grafico Loss vs Epochs")
-        plot_loss_vs_epochs(best_results, save_path='cup_loss_vs_epochs.png')
+        # FASE 2: RE-TRAINING CON TRACKING
+        print(f"\n FASE 2: Re-training con tracking loss epoch-by-epoch")
+        train_loss_history, val_loss_history, final_net = retrain_with_loss_tracking(best_results)
         
-        # FASE 3: Test Set
-        print(f"\n FASE 3: Valutazione Test Set")
+        # FASE 3: GRAFICO LOSS VS EPOCHS
+        print(f"\n FASE 3: Grafico Loss vs Epochs")
+        plot_loss_history(train_loss_history, val_loss_history, best_results, 
+                         save_path='cup_loss_vs_epochs.png')
+        
+        # FASE 4: Test Set
+        print(f"\n FASE 4: Valutazione Test Set")
         X_test = best_results['data'][4]
         y_test = best_results['data'][5]
-        test_results = evaluate_on_test_set(best_results['network'], X_test, y_test, 
+        test_results = evaluate_on_test_set(final_net, X_test, y_test, 
                                             best_results['normalization'])
+        
+        # FASE 4.5:  GRAFICO PREDIZIONI VS VALORI REALI
+        print(f"\n FASE 4.5: Grafico Predizioni vs Valori Reali")
+        plot_predictions_vs_actual(best_results, test_results, save_path='cup_predictions_vs_actual.png')
         
         # RIEPILOGO
         print(f"\n{'='*70}")
-        print(" RIEPILOGO")
+        print(" RIEPILOGO FINALE")
         print(f"{'='*70}")
-        print(f"Train MEE:   {best_results['train_mee']:.4f}")
-        print(f"Val MEE:     {best_results['val_mee']:.4f}")
-        print(f"Test MEE:   {test_results['test_mee']:.4f}")
-        print(f"\nParametri:")
-        print(f"  LR:      {best_results['lr']}")
+        print(f"Train MEE (grid):   {best_results['train_mee']:.4f}")
+        print(f"Val MEE (grid):     {best_results['val_mee']:.4f}")
+        print(f"Test MEE (final):   {test_results['test_mee']:.4f}")
+        print(f"\nParametri migliori:")
+        print(f"  LR:       {best_results['lr']}")
         print(f"  L2:       {best_results['l2_lambda']}")
         print(f"  Momentum: {best_results['momentum']}")
-        print(f"  Hidden:   {best_results['hidden_units']}")
+        print(f"  Arch: {best_results['network_structure']}")
+        print(f"  Seed:     {best_results['seed']}")
         
         print(f"\n{'='*70}")
         print(" CUP COMPLETATO!")
@@ -524,4 +675,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n ERRORE: {e}")
         import traceback
-        traceback.print_exc()
+        traceback. print_exc()
