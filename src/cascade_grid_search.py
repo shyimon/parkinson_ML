@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 from cascade_correlation import CascadeNetwork
 from data_manipulation import *
 from tqdm import tqdm
+from joblib import Parallel, delayed
+import multiprocessing
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -51,7 +53,8 @@ class CascadeGridSearch:
                 input_dim, 
                 output_dim, 
                 learning_rate=params['learning_rate'], 
-                algorithm=params['algorithm']
+                algorithm=params['algorithm'],
+                l2_lambda=params.get('l2_lambda', 0.0)
             )
             
             final_error = net.train(
@@ -64,6 +67,7 @@ class CascadeGridSearch:
             )
             
             loss_history = net.loss_history
+            val_loss_history = getattr(net, 'val_loss_history', [])
             
             y_pred_train = np.array([net.forward(x) for x in self.X_train])
             y_pred_val = np.array([net.forward(x) for x in self.X_val])
@@ -79,7 +83,8 @@ class CascadeGridSearch:
                 'val_loss': val_loss,
                 'test_loss': test_loss,
                 'min_val_loss': val_loss, 
-                'history': loss_history
+                'history': loss_history,
+                'val_history': val_loss_history
             }
             
             if self.dataset_name != 'cup':
@@ -124,16 +129,46 @@ class CascadeGridSearch:
     def coarse_grid_search(self):
         print("INIZIO COARSE SEARCH CASCADE")
 
-        param_grid = {
-            'learning_rate': [0.01, 0.05, 0.1],   
-            'patience': [20, 50],                 
-            'tolerance': [0.01, 0.001],           
-            'max_hidden_units': [5, 10, 15],      
-            'algorithm': ['quickprop', 'rprop'],
-            'epochs': [1000]
-        }
+        common_fixed = {'epochs': [2000], 'algorithm': ['quickprop', 'rprop']}
+        if self.dataset_name in ['monk3']:
+            param_grid = {
+                'learning_rate': [0.01, 0.05, 0.1],
+                'patience': [30],            # Meno pazienza, fermati prima
+                'tolerance': [0.01],         # Tolleranza più alta per ignorare il rumore
+                'max_hidden_units': [3, 5],  # Pochi neuroni! Max 3-5 sono spesso sufficienti
+                'l2_lambda': [1e-4, 1e-3, 1e-2], # REGOLARIZZAZIONE FONDAMENTALE
+                **common_fixed
+            }
+        """if self.dataset_name in ['monk1', 'monk2']:
+             param_grid = {
+                'learning_rate': [0.01, 0.05, 0.1, 0.2],
+                'patience': [30, 50],
+                'tolerance': [0.01, 0.001],
+                'max_hidden_units': [12],  # Fisso
+                'algorithm': ['quickprop', 'rprop'],
+                **common_fixed
+            }
+        elif self.dataset_name == 'cup':
+            param_grid = {
+                'learning_rate': [0.001, 0.005, 0.01, 0.05],
+                'patience': [50, 80],
+                'tolerance': [0.001, 0.0001],
+                'max_hidden_units': [20],  # Fisso e più alto
+                'algorithm': ['quickprop', 'rprop'],
+                **common_fixed
+            }
+        else:
+            param_grid = {
+                'learning_rate': [0.01, 0.05, 0.1],
+                'patience': [30],            # Meno pazienza, fermati prima
+                'tolerance': [0.01],         # Tolleranza più alta per ignorare il rumore
+                'max_hidden_units': [3, 5],  # Pochi neuroni! Max 3-5 sono spesso sufficienti
+                'l2_lambda': [1e-4, 1e-3, 1e-2], # REGOLARIZZAZIONE FONDAMENTALE
+                **common_fixed
+            } """
         
         all_combinations = []
+        
         for combo in itertools.product(*param_grid.values()):
             params = dict(zip(param_grid.keys(), combo))
             
@@ -145,13 +180,22 @@ class CascadeGridSearch:
                 all_combinations.append(params)
         
         print(f"Numero totale di combinazioni: {len(all_combinations)}")
+  
+        num_cores = multiprocessing.cpu_count()
+        print(f"Avvio esecuzione parallela su {num_cores} core...")
+        
+        parallel_results = Parallel(n_jobs=-1)(
+            delayed(self.train_evaluate)(params) 
+            for params in tqdm(all_combinations, desc="Coarse Grid Search (Parallel)")
+        )
         
         best_score = float('inf')
         best_params = None
         all_results = []
         
-        for i, params in enumerate(tqdm(all_combinations, desc="Grid Search")):
-            results, _ = self.train_evaluate(params)
+        # Riaggregazione dei risultati dopo il parallelo
+        for i, (results, _) in enumerate(parallel_results):
+            params = all_combinations[i]
             
             if results is not None:
                 all_results.append((params, results))
@@ -162,7 +206,6 @@ class CascadeGridSearch:
                 if current_score < best_score:
                     best_score = current_score
                     best_params = params.copy()
-                    # print(f"\nNuovo miglior risultato: {current_score:.6f}")
         
         print("\n" + "="*80)
         print("MIGLIORI RISULTATI COARSE GRID SEARCH")
@@ -222,12 +265,22 @@ class CascadeGridSearch:
         
         print(f"Numero di combinazioni di raffinamento: {len(all_combinations)}")
         
+        # --- MODIFICA JOBLIB: Esecuzione parallela ---
+        print(f"Avvio esecuzione parallela fine search...")
+        
+        parallel_results = Parallel(n_jobs=-1)(
+            delayed(self.train_evaluate)(params) 
+            for params in tqdm(all_combinations, desc="Fine Grid Search (Parallel)")
+        )
+        # ---------------------------------------------
+        
         best_fine_score = float('inf')
         best_fine_params = None
         fine_results = []
         
-        for params in tqdm(all_combinations, desc="Fine Grid Search"):
-            results, _ = self.train_evaluate(params)
+        # Riaggregazione
+        for i, (results, _) in enumerate(parallel_results):
+            params = all_combinations[i]
             
             if results is not None:
                 fine_results.append((params, results))
@@ -265,6 +318,8 @@ class CascadeGridSearch:
         
         # Plot Loss
         axes[0].plot(training_loss, label='Training Loss', alpha=0.7)
+        if 'val_history' in results and len(results['val_history']) > 0:
+            axes[0].plot(results['val_history'], label='Validation Loss', linestyle='--', color='orange', alpha=0.7)
         axes[0].set_xlabel('Epoche')
         axes[0].set_ylabel('Loss (MSE Normalized)')
         axes[0].set_title(f'Learning Curve - {self.dataset_name}')

@@ -62,7 +62,7 @@ max_units = 10
 print(f"Creating Cascade Network: {n_inputs} Inputs -> {n_outputs} Outputs")
 print("Algorithm: Quickprop")
 
-net = CascadeNetwork(n_inputs, n_outputs, eta, algorithm='quickprop')
+net = CascadeNetwork(n_inputs, n_outputs, eta, algorithm='quickprop', l2_lambda=0.0)
 
 print("Start training Phase 0 (Linear Training)...")
 
