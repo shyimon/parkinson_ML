@@ -130,15 +130,16 @@ class CascadeGridSearch:
         print("INIZIO COARSE SEARCH CASCADE")
 
         common_fixed = {'epochs': [2000], 'algorithm': ['quickprop', 'rprop']}
-        if self.dataset_name in ['monk3']:
+        if self.dataset_name == 'cup':
             param_grid = {
-                'learning_rate': [0.01, 0.05, 0.1],
-                'patience': [30],            # Meno pazienza, fermati prima
-                'tolerance': [0.01],         # Tolleranza più alta per ignorare il rumore
-                'max_hidden_units': [3, 5],  # Pochi neuroni! Max 3-5 sono spesso sufficienti
-                'l2_lambda': [1e-4, 1e-3, 1e-2], # REGOLARIZZAZIONE FONDAMENTALE
+                'learning_rate': [0.001, 0.005, 0.01, 0.05],
+                'patience': [50, 80],
+                'tolerance': [0.001, 0.0001],
+                'max_hidden_units': [20],  # Fisso e più alto
+                'algorithm': ['quickprop', 'rprop'],
                 **common_fixed
             }
+            
         """if self.dataset_name in ['monk1', 'monk2']:
              param_grid = {
                 'learning_rate': [0.01, 0.05, 0.1, 0.2],
@@ -148,16 +149,7 @@ class CascadeGridSearch:
                 'algorithm': ['quickprop', 'rprop'],
                 **common_fixed
             }
-        elif self.dataset_name == 'cup':
-            param_grid = {
-                'learning_rate': [0.001, 0.005, 0.01, 0.05],
-                'patience': [50, 80],
-                'tolerance': [0.001, 0.0001],
-                'max_hidden_units': [20],  # Fisso e più alto
-                'algorithm': ['quickprop', 'rprop'],
-                **common_fixed
-            }
-        else:
+        else: # monk3
             param_grid = {
                 'learning_rate': [0.01, 0.05, 0.1],
                 'patience': [30],            # Meno pazienza, fermati prima
