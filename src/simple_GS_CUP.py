@@ -198,7 +198,7 @@ def grid_search_cup(n_seeds_per_config=3):
                             if results['val_mee'] < best_val_mee:
                                 best_val_mee = results['val_mee']
                                 best_results = results
-                                print(f"      ⭐ BEST:  {best_val_mee:. 4f}")
+                                print(f" BEST:  {best_val_mee:. 4f}")
                         except Exception as e:
                             print(f"Error: {str(e)[:40]}")
                             continue
@@ -300,7 +300,7 @@ def retrain_with_loss_tracking(best_results):
     print(f" RI-ADDESTRAMENTO CON TRACKING LOSS")
     print(f"{'='*70}")
     print(f"LR:  {best_results['lr']}, L2: {best_results['l2_lambda']}, "
-          f"Hidden: {best_results['hidden_units']}, Seed: {best_results['seed']}")
+          f"Architecture: {best_results['architecture']}, Seed: {best_results['seed']}")
     
     X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
     x_min, x_max, y_min, y_max = best_results['normalization']

@@ -302,6 +302,15 @@ class NeuralNetwork:
         if loss_type == "half_mse":
             return error
         
+        elif loss_type == "mse":
+            return 2 * error
+
+        elif loss_type == "mee":
+            norm = np.sqrt(np.sum(error ** 2))
+            if norm == 0:
+                return np.zeros_like(error)
+            return error / norm
+        
         elif loss_type == "mae":
             return np.sign(error)
         
