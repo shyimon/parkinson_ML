@@ -28,19 +28,19 @@ class Neuron:
             self.weights = np.random.uniform(self.weight_floor, self.weight_ceiling, size=num_inputs)
             self.bias = np.random.uniform(0.0, 0.0)
 
-        #per mini-batch gradient accumulation
-        self.prev_weight_grad = np.zeros(num_inputs) # Per ricordare il gradiente dei pesi al passo precedente (t-1)
-        self.prev_bias_grad = 0.0 # Inizializza a zero la memoria del gradiente del bias al passo precedente 
+        # for mini-batch gradient accumulation
+        self.prev_weight_grad = np.zeros(num_inputs)
+        self.prev_bias_grad = 0.0
         
-        # Per quickprop
-        self.prev_weight_update = np.zeros(num_inputs) # Per ricordare l'ultimo aggiornamento dei pesi (t-1)
-        self.prev_bias_update = 0.0 # Inizializza a zero la memoria dell'ultimo aggiornamento del bias
+        # for quickprop
+        self.prev_weight_update = np.zeros(num_inputs)
+        self.prev_bias_update = 0.0
         
-        # Per rprop
+        # for rprop
         self.rprop_step_w = np.full(num_inputs, 0.1) # Serve un valore del passo specifico per ogni peso (dal momento che non usa un eta globale) che viene inizializzato a 0.1
         self.rprop_step_b = 0.1 # Lo stesso per il bias
     
-        # Per mini-batch gradient accumulation
+        # for mini-batch gradient accumulation
         self.weight_grad_accum = np.zeros(num_inputs)
         self.bias_grad_accum = 0.0
         
@@ -48,17 +48,17 @@ class Neuron:
     def attach_to_output(self, neurons):
         self.attached_neurons = list(neurons)
     
-    # Activation function gets called dynamically (string based) based on how the neuron was initialized
+    # activation function gets called dynamically (string based) based on how the neuron was initialized
     def activation_funct(self, input):
         if self.activation_function_type == "sigmoid":
-            input = np.clip(input, -500, 500)  # Evita overflow
+            input = np.clip(input, -500, 500) 
             return(1.0/(1.0 + np.exp(-input)))
         elif self.activation_function_type == "tanh":
             return np.tanh(input)
         else:
             raise ValueError(f"The specified activation function {self.activation_function_type} is not implemented as of yet.")
     
-    # Activation function's derivative gets called dynamically (string based) based on how the neuron was initialized
+    # activation function's derivative gets called dynamically (string based) based on how the neuron was initialized
     def activation_deriv(self, input):
         if self.activation_function_type == "sigmoid":
             sig = self.output 
@@ -69,20 +69,16 @@ class Neuron:
         else:
             raise ValueError(f"The specified activation function {self.activation_function_type} is not implemented as of yet.")
        
-        # Clipping per stabilità
         return np.clip(deriv, 1e-8, 1.0)
 
     # a single example is fed to the neuron. The sum and then whatever activation function was selected are called
     def feed_neuron(self, inputs):
-        # Converti inputs in array numpy e assicurati che sia 1-D
         if inputs is None:
             print(f"ERROR: inputs is None! Neuron: layer index {self.index_in_layer}, is_output: {self.is_output_neuron}")
             raise ValueError("Inputs cannot be None")
 
-        # Assicurati che inputs sia un array numpy
         self.inputs = np.asarray(inputs, dtype=float).flatten()
 
-        # Debug: verifica la dimensione
         if self.inputs.shape[0] != self.weights.shape[0]:
             print(f"DEBUG feed_neuron: inputs shape {self.inputs.shape}, weights shape {self.weights.shape}")
             print(f"  Neuron: layer index {self.index_in_layer}, is_output: {self.is_output_neuron}")
@@ -91,11 +87,10 @@ class Neuron:
         self.output = self.activation_funct(self.net)
         return self.output
     
-    # The delta computation for an output neuron and a hidden neuron are different, but
+    # the delta computation for an output neuron and a hidden neuron are different, but
     # this method compounds them, checking the is_output_neuron flag (set at __init__ time)
-    def compute_delta(self, signal_error=None): # target viene sostituito con signal_error che arriva direttamente da neural_network.backward
+    def compute_delta(self, signal_error=None):
         if self.is_output_neuron:
-            # Assicurati che signal_error sia uno scalare
             if isinstance(signal_error, np.ndarray):
                 signal_error = float(signal_error.flatten()[0])
             else:
@@ -105,37 +100,28 @@ class Neuron:
             delta_sum = 0.0
             for k in self.attached_neurons:
                 try:
-                    # Proteggi l'accesso a k.weights per evitare errori di indiceazione su scalari
                     weights = np.asarray(k.weights)
                     if weights.ndim == 0:
-                        # È uno scalare
                         w_kj = float(weights)
                     else:
-                        # È un array, accedi all'elemento
                         w_kj = float(weights[self.index_in_layer])
                     delta_sum += k.delta * w_kj
                 except (IndexError, TypeError) as e:
-                    # Se c'è un errore, salta questo neurone
                     print(f"Warning: Error accessing weight in compute_delta: {e}")
                     continue
             self.delta = delta_sum * self.activation_deriv(self.output)
         return self.delta
     
     def accumulate_gradients(self):
-        """Accumula gradienti invece di aggiornare immediatamente"""
-        # Assicurati che inputs sia un array numpy
         inputs_array = np.asarray(self.inputs, dtype=float)
         self.weight_grad_accum += self.delta * inputs_array
         self.bias_grad_accum += self.delta
     
     def reset_grad_accum(self):
-        """Resetta accumulatore gradienti"""
         self.weight_grad_accum.fill(0.0)
         self.bias_grad_accum = 0.0
     
     def apply_accumulated_gradients(self, **kwargs):
-        
-        """Applica gradienti accumulati (media del batch) a seconda dell'algoritmo scelto"""
         eta = kwargs.get("eta", 0.1)
         batch_size = kwargs.get("batch_size", 1)
         algorithm = kwargs.get("algorithm", 'sgd')
@@ -147,13 +133,11 @@ class Neuron:
             grad_b = self.bias_grad_accum / batch_size  
 
             if momentum > 0.0:
-                # Momentum
                 self.vel_w = momentum * self.vel_w + grad_w
                 self.vel_b = momentum * self.vel_b + grad_b
                 self.weights += eta * self.vel_w 
                 self.bias += eta * self.vel_b
             else:
-                # Senza momentum
                 self.weights -= eta * grad_w
                 self.bias -= eta * grad_b
 
@@ -165,49 +149,28 @@ class Neuron:
             l2_lambda = kwargs.get('l2_lambda', 0.0)
             
             self.update_weights_rprop(batch_size, eta_plus, eta_minus, delta_min, delta_max, l2_lambda)
-            self.reset_grad_accum() # Resetta gli accumuli dell'aggiornamento dei pesi per il prossimo batch
+            self.reset_grad_accum() 
         
         elif algorithm == 'quickprop':
             mu = kwargs.get('mu', 1.75)
             decay = kwargs.get('decay', -0.0001)
             
             self.update_weights_quickprop(batch_size, eta, mu, decay)
-            self.reset_grad_accum() # Resetta gli accumuli dell'aggiornamento dei pesi per il prossimo batch
+            self.reset_grad_accum()
         
-        # Reset accumulatori
         self.weight_grad_accum.fill(0.0)
         self.bias_grad_accum = 0.0
-        '''
-            grad_w = self.weight_grad_accum / batch_size
-            grad_b = self.bias_grad_accum / batch_size  
-
-            if momentum >= 0.0:
-                self.vel_w = momentum * self.vel_w + grad_w
-                self.vel_b = momentum * self.vel_b + grad_b
-                self.weights -= eta * self.vel_w
-                self.bias -= eta * self.vel_b  
-            else:
-             self.weights -= eta * grad_w
-            self.bias -= eta * grad_b  
-            # Reset accumulatori batch
-            self.weight_grad_accum.fill(0.0)
-            self.bias_grad_accum = 0.0 
-            '''
 
     def update_weights(self, eta, l2_lambda=0.00):
-        # Assicurati che inputs sia un array numpy
         if self.inputs is None:
             self.inputs = np.zeros(self.weights.shape[0])
     
         inputs_array = np.asarray(self.inputs, dtype=float).flatten()
     
-        # Verifica che le dimensioni corrispondano
         if inputs_array.shape[0] != self.weights.shape[0]:
-            # Correggi: resetta inputs
             self.inputs = np.zeros(self.weights.shape[0])
             inputs_array = self.inputs
     
-        # Calcola l'aggiornamento
         weight_update = self.delta * inputs_array - l2_lambda * self.weights
         self.weights += eta * weight_update
         self.bias += eta * self.delta
@@ -221,42 +184,34 @@ class Neuron:
         self.bias = self.best_bias
     
     def update_weights_rprop(self, batch_size, eta_plus=1.2, eta_minus=0.5, delta_min=1e-6, delta_max=50.0, l2_lambda=0.0):
-        """
-        Implementazione dell'algoritmo RPROP per l'aggiornamento dei pesi.
-        """
-        # Normalizzazione del gradiente per evitare dipendenza dalla dimensione del batch
         curr_grad_w = self.weight_grad_accum / batch_size
         curr_grad_b = self.bias_grad_accum / batch_size
 
-        if l2_lambda > 0.0: # Penalizzazione dei pesi grandi tramite L2 regularization
+        if l2_lambda > 0.0:
             curr_grad_w -= l2_lambda * self.weights
-            
-        # Aggiornamento pesi 
+             
         for i in range(len(self.weights)):
-            # Prodotto dei gradienti (t-1) * (t)
             change = self.prev_weight_grad[i] * curr_grad_w[i]
 
-            if change > 0: # Il gradiente ha mantenuto lo stesso segno rispetto al passo precedente 
-                self.rprop_step_w[i] = min(self.rprop_step_w[i] * eta_plus, delta_max) # Aumento del passo poiché si sta andando nella direzione giusta
-                weight_delta = np.sign(curr_grad_w[i]) * self.rprop_step_w[i] # Si prende solo il segno del gradiente corrente e lo si aggiunge al passo aggiornato
+            if change > 0: 
+                self.rprop_step_w[i] = min(self.rprop_step_w[i] * eta_plus, delta_max) 
+                weight_delta = np.sign(curr_grad_w[i]) * self.rprop_step_w[i] 
                 
-                self.weights[i] += weight_delta # Aggiornamento effettivo del peso 
-                self.prev_weight_grad[i] = curr_grad_w[i] # Memorizzazione del gradiente corrente per il prossimo confronto perchè questo valore al prossimo passo diventerà t-1
-                self.prev_weight_update[i] = weight_delta # Memorizzazione dell'ultimo aggiornamento del peso
+                self.weights[i] += weight_delta 
+                self.prev_weight_grad[i] = curr_grad_w[i]
+                self.prev_weight_update[i] = weight_delta 
 
-            elif change < 0: # Il gradiente ha cambiato segno rispetto al passo precedente (sta andando nella direzione opposta)
-                self.rprop_step_w[i] = max(self.rprop_step_w[i] * eta_minus, delta_min) # Diminuzione del passo poiché si è oltrepassato il minimo locale
-                self.weights[i] -= self.prev_weight_update[i] # Si annulla l'ultimo aggiornamento del peso (=si torna al passo precedente) perchè troppo grande
-                self.prev_weight_grad[i] = 0 # Il gradiente viene ripristinato a zero per evitare di fare un ulteriore aggiornamento in questa direzione al prossimo passo (backtracking)
+            elif change < 0: 
+                self.rprop_step_w[i] = max(self.rprop_step_w[i] * eta_minus, delta_min) 
+                self.weights[i] -= self.prev_weight_update[i] 
+                self.prev_weight_grad[i] = 0 
                 
-            else: # Il gradiente è zero o non ha cambiato segno (all'inizio del tr abbiamo t= 0 quindi non esiste un gradiente precedente perchè il prodotto è 0)
-                weight_delta = np.sign(curr_grad_w[i]) * self.rprop_step_w[i] # Si prende solo il segno del gradiente corrente e lo si aggiunge al passo attuale
+            else: 
+                weight_delta = np.sign(curr_grad_w[i]) * self.rprop_step_w[i] 
                 self.weights[i] -= weight_delta
-                # Ricostruzione della memoria
                 self.prev_weight_grad[i] = curr_grad_w[i]
                 self.prev_weight_update[i] = weight_delta
 
-        # Aggiornamento bias con lo stesso metodo
         change_b = self.prev_bias_grad * curr_grad_b
         
         if change_b > 0:
@@ -278,41 +233,35 @@ class Neuron:
             self.prev_bias_update = bias_delta
     
     def update_weights_quickprop(self, batch_size, eta, mu=1.75, decay=-0.0001):
-        """
-        Implementazione dell'algoritmo Quickprop per l'aggiornamento dei pesi.
-        """
-        # Normalizzazione del gradiente per evitare dipendenza dalla dimensione del batch
         curr_grad_w = self.weight_grad_accum / batch_size
         curr_grad_b = self.bias_grad_accum / batch_size
 
-        # Aggiornamento pesi 
         for i in range(len(self.weights)):
             grad_descent = curr_grad_w[i]
-            current_slope = -grad_descent + (decay * self.weights[i]) # Aggiunta del termine di weight decay per evitare che i pesi facciano passi troppo grandi
+            current_slope = -grad_descent + (decay * self.weights[i]) 
             prev_slope = self.prev_weight_grad[i]
             prev_step= self.prev_weight_update[i]
             
             step = 0.0
             # Ignition
-            if abs(prev_step) < 1e-10: # Se il passo precedente è molto piccolo (ossia siamo all'inizio del training)
-                step = - eta * current_slope # Si usa la discesa del gradiente standard per generare il primo passo per arrivare al secondo punto (il primo è l'inizializzazione)
+            if abs(prev_step) < 1e-10: 
+                step = - eta * current_slope 
             else:
                 grad_diff = prev_slope - current_slope
                 if abs(grad_diff) < 1e-10:
                     step = - eta * current_slope
                 else:
-                    step = (current_slope / grad_diff) * prev_step # Calcolo del passo quickprop!!
-                    max_step = mu * abs(prev_step) # Calcolo del passo massimo consentito per evitare salti troppo grandi
+                    step = (current_slope / grad_diff) * prev_step
+                    max_step = mu * abs(prev_step) 
                     if abs(step) > max_step:
-                        step = max_step*np.sign(step) # Ignoriamo la grandezza suggerita dalla formula e impostiamo la grandezza al limite massimo consentito mantenendo la direzione originale (sign)
-                    if np.sign(step) == np.sign(current_slope): # Se il passo calcolato ha la stessa direzione del gradiente (ossia si va nella direzione opposta alla discesa del gradiente)
-                        step = - eta * current_slope # Si forza l'aggiornamento a seguire la discesa del gradiente
+                        step = max_step*np.sign(step) 
+                    if np.sign(step) == np.sign(current_slope):
+                        step = - eta * current_slope 
                         
-            self.weights[i] += step # Aggiornamento effettivo del peso
-            self.prev_weight_grad[i] = current_slope # Memorizzazione del gradiente corrente per il prossimo confronto perchè questo valore al prossimo passo diventerà t-1
-            self.prev_weight_update[i] = step # Memorizzazione dell'ultimo aggiornamento del peso
+            self.weights[i] += step 
+            self.prev_weight_grad[i] = current_slope 
+            self.prev_weight_update[i] = step
     
-        # Aggiornamento bias con lo stesso metodo
         current_slope_b = - curr_grad_b 
         prev_slope_b = self.prev_bias_grad
         
@@ -330,7 +279,6 @@ class Neuron:
                 if np.sign(step_b) == np.sign(current_slope_b):
                     step_b = - eta * current_slope_b
         
-        self.bias += step_b # Aggiornamento effettivo del bias
-        # Ricostruzione della memoria
+        self.bias += step_b 
         self.prev_bias_grad = curr_grad_b
         self.prev_bias_update = step_b 

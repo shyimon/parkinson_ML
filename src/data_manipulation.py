@@ -1,8 +1,7 @@
 import pandas as pd
 import numpy as np
 
-# Monk datasets are returned separately and splitted into training, test, parameters and targets
-# ho messo dataset_shuffle=false
+# monk datasets split and return
 def return_monk1(dataset_shuffle=False, one_hot=False, val_split=0.3):
     monk1_train_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.train'
     monk1_test_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/monks-problems/monks-1.test'
@@ -11,7 +10,6 @@ def return_monk1(dataset_shuffle=False, one_hot=False, val_split=0.3):
     monk1_train = pd.read_csv(monk1_train_url, header=None, names=column_names, sep="\\s+")
     monk1_test = pd.read_csv(monk1_test_url, header=None, names=column_names, sep="\\s+")
 
-    #ho sistemato per assicurarmi che le colonne tra train set e test set siano ben allineate
     if dataset_shuffle:
         monk1_train = monk1_train.sample(frac=1).reset_index(drop=True)
         monk1_test = monk1_test.sample(frac=1).reset_index(drop=True)
@@ -20,7 +18,6 @@ def return_monk1(dataset_shuffle=False, one_hot=False, val_split=0.3):
         monk1_train = pd.get_dummies(monk1_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], dtype=int)
         monk1_test = pd.get_dummies(monk1_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], dtype=int)
 
-        #allineo le colonne
         all_columns = sorted(set(monk1_train.columns).union(set(monk1_test.columns)))
         for col in all_columns:
             if col not in monk1_train.columns:
@@ -28,7 +25,6 @@ def return_monk1(dataset_shuffle=False, one_hot=False, val_split=0.3):
             if col not in monk1_test.columns:
                 monk1_test[col] = 0
 
-        # riordino
         monk1_train = monk1_train[all_columns]
         monk1_test = monk1_test[all_columns]
 
@@ -62,7 +58,6 @@ def return_monk2(dataset_shuffle=True, one_hot=False, val_split=0.3):
         monk2_train = pd.get_dummies(monk2_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
         monk2_test = pd.get_dummies(monk2_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
     
-        #allineo le colonne
         all_columns = sorted(set(monk2_train.columns).union(set(monk2_test.columns)))
         for col in all_columns:
             if col not in monk2_train.columns:
@@ -70,7 +65,6 @@ def return_monk2(dataset_shuffle=True, one_hot=False, val_split=0.3):
             if col not in monk2_test.columns:
                 monk2_test[col] = 0
 
-        # riordino
         monk2_train = monk2_train[all_columns]
         monk2_test = monk2_test[all_columns]
 
@@ -103,7 +97,6 @@ def return_monk3(dataset_shuffle=True, one_hot=True, val_split=0.3):
         monk3_train = pd.get_dummies(monk3_train, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
         monk3_test = pd.get_dummies(monk3_test, columns=['a1', 'a2', 'a3', 'a4', 'a5', 'a6'])
 
-        #allineo le colonne
         all_columns = sorted(set(monk3_train.columns).union(set(monk3_test.columns)))
         for col in all_columns:
             if col not in monk3_train.columns:
@@ -111,7 +104,6 @@ def return_monk3(dataset_shuffle=True, one_hot=True, val_split=0.3):
             if col not in monk3_test.columns:
                 monk3_test[col] = 0
 
-        # riordino
         monk3_train = monk3_train[all_columns]
         monk3_test = monk3_test[all_columns]
         
@@ -128,7 +120,7 @@ def return_monk3(dataset_shuffle=True, one_hot=True, val_split=0.3):
     monk3_train_y = monk3_train_y[:split]
     return monk3_train_X, monk3_train_y, monk3_val_X, monk3_val_y, monk3_test_X, monk3_test_y
 
-
+# load, split and return cup dataset
 def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_size=125):
     cols = ["id"] + [f"in_{i}" for i in range(1, 13)] + [f"t_{i}" for i in range(1, 5)]
     cup = pd.read_csv("data/ML-CUP25-TR.csv", comment="#", names=cols)
@@ -155,7 +147,6 @@ def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_s
     return cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y
     
 
-# Linear normalization method between a max and min value passed as parameters 
 def normalize(X, min, max, x_min, x_max):
     diff = x_max - x_min
     diff[diff == 0] = 1e-9
@@ -168,7 +159,7 @@ def MEE(y_true, y_pred):
     eucledean_distances = np.sqrt(np.sum(np.square(y_true - y_pred), axis=1))
     return np.mean(eucledean_distances)
 
-def denormalize(X_norm, min_target, max_target, x_min_orig, x_max_orig): # Inverte la normalizzazione per tornare ai valori originali
+def denormalize(X_norm, min_target, max_target, x_min_orig, x_max_orig):
     diff = x_max_orig - x_min_orig
     diff[diff == 0] = 1e-9
     return ((X_norm - min_target) / (max_target - min_target)) * diff + x_min_orig
