@@ -82,18 +82,15 @@ class NeuralNetwork:
     # backprop implementation
     def backward(self, error_signals, accumulate=False):
         """Versione modificata per supportare accumulazione"""
-        # Normalizza error_signals a una lista di scalari
         error_signals = np.asarray(error_signals).flatten()
         
         if error_signals.ndim == 0:
             error_signals = np.array([error_signals.item()])
-        
-        # Assicurati che abbiamo un elemento per ogni neurone di output
+
         num_output_neurons = len(self.layers[-1])
         if len(error_signals) == 1 and num_output_neurons == 1:
             error_signals = error_signals
         elif len(error_signals) != num_output_neurons:
-            # Se non corrisponde, usa solo il primo elemento
             error_signals = np.array([error_signals[0] for _ in range(num_output_neurons)])
         
         for i, neuron in enumerate(self.layers[-1]):
@@ -119,17 +116,17 @@ class NeuralNetwork:
         self.loss_history = {"training": [], "validation": []}
 
         for epoch in range(epochs):
-            # Unified batch loop
+            # unified batch loop
             epoch_train_loss = 0.0
             for start_idx in range(0, len(X_train), batch_size):
 
                 end_idx = min(start_idx + batch_size, len(X_train))
                 current_batch_size = end_idx - start_idx
 
-                # Reset accumulators
+                # ueset accumulators
                 self._reset_gradients()
 
-                # Accumulate gradients inside the batch
+                # accumulate gradients inside the batch
                 for i in range(start_idx, end_idx):
                     xi = X_train[i]
                     yi = y_train[i]
@@ -140,25 +137,24 @@ class NeuralNetwork:
                     epoch_train_loss += np.sum(sample_loss)
 
                     err = self.compute_error_signal(yi, y_pred, loss_type=self.loss_type)
-                    # Assicura che err sia un array 1D
                     err = np.asarray(err).flatten()
                     self.backward(err, accumulate=True)
 
-                #apply accumulated gradient once
+                # apply accumulated gradient once
                 self._apply_accumulated_gradients(batch_size=current_batch_size)
 
-            # Training loss    
+            # --- training loss    
             train_loss_epoch = epoch_train_loss / len(X_train)
             self.loss_history["training"].append(train_loss_epoch)
 
-            #Validation loss (non tocca i pesi)
+            # --- validation loss
             y_pred_val = self.predict(X_val)
             val_loss = np.sum(self.compute_loss(y_val, y_pred_val, loss_type=self.loss_type))
             avg_val_loss = val_loss / len(y_val)
             self.loss_history["validation"].append(avg_val_loss)
             self._update_lr_on_plateau(avg_val_loss, patience_lr=patience // 2)
 
-            #early stopping su validation
+            # early stopping su validation
             min_delta = 1e-4  # tuneable, but this is reasonable for normalized CUP
 
             if avg_val_loss < self.best_val_loss - min_delta:
@@ -187,17 +183,14 @@ class NeuralNetwork:
         print(f"\nEpoch {epoch}, Loss: {self.loss_history["training"][-1]:.6f}\nValidation Loss: {self.loss_history["validation"][-1]:.6f}")
         return self.best_val_loss
         
-
+    # when learning patience runs out, the learning rate decays by a set amount
+    # to focus on a more specific area of the solution space
     def _update_lr_on_plateau(self, current_val_loss, patience_lr):
-        # Gestisci correttamente tutti i casi
         if np.isinf(self.best_val_loss):
-            # Prima epoca: best_val_loss è ancora np.inf
             improvement = 0
         elif self.best_val_loss > 1e-6:
-            # Caso normale: calcola improvement relativo
             improvement = (self.best_val_loss - current_val_loss) / self.best_val_loss
         else:
-            # best_val_loss molto piccolo: usa differenza assoluta
             improvement = self.best_val_loss - current_val_loss
     
         if improvement > 0.001:
@@ -210,10 +203,6 @@ class NeuralNetwork:
             self.lr_wait = 0
         
     def compute_loss(self, y_true, y_pred, loss_type="half_mse"):
-        """
-        Calcola la loss in base al tipo specificato.
-        """
-        # Converti in array numpy se necessario
         y_true = np.asarray(y_true).flatten()
         y_pred = np.asarray(y_pred).flatten()
         
@@ -234,7 +223,6 @@ class NeuralNetwork:
             linear_loss = delta * (np.abs(error) - 0.5 * delta)
             return np.where(is_small_error, squared_loss, linear_loss)
         elif loss_type == "binary_crossentropy":
-            # Clipping per evitare log(0) che darebbe -inf
             epsilon = 1e-15
             y_pred_clipped = np.clip(y_pred, epsilon, 1 - epsilon)
             # Formula:  -[y*log(p) + (1-y)*log(1-p)]
@@ -246,11 +234,8 @@ class NeuralNetwork:
             return np.sqrt(np.sum(error ** 2))
         else:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
+    
     def derivative_loss(self, y_true, y_pred, loss_type):
-        """
-        Calcola la derivata della loss rispetto a y_pred in base al tipo di loss specificato
-        """
-        # Converti in array numpy se necessario
         y_true = np.asarray(y_true).flatten()
         y_pred = np.asarray(y_pred).flatten()
         
@@ -266,7 +251,6 @@ class NeuralNetwork:
             return np.tanh(error)
         
         elif loss_type == "binary_crossentropy":
-            # Clipping per evitare log(0) che darebbe -inf
             epsilon = 1e-15
             y_pred_clipped = np. clip(y_pred, epsilon, 1 - epsilon)
     
@@ -290,10 +274,6 @@ class NeuralNetwork:
             raise ValueError(f"Loss type '{loss_type}' not implemented.")
     
     def compute_error_signal(self, y_true, y_pred, loss_type):
-        """
-        Calcola il segnale di errore da passare al neurone di output in base al tipo di loss specificato
-        """
-        # Converti in array numpy se necessario
         y_true = np.asarray(y_true).flatten()
         y_pred = np.asarray(y_pred).flatten()
         
@@ -318,13 +298,12 @@ class NeuralNetwork:
             return np.tanh(error)
         
         elif loss_type == "binary_crossentropy":
-            # Clipping per evitare log(0) che darebbe -inf
             epsilon = 1e-15
             y_pred_clipped = np. clip(y_pred, epsilon, 1 - epsilon)
     
             # Formula:  -[y*log(p) + (1-y)*log(1-p)]
             # Derivata rispetto a y_pred:  (y_pred - y_true) / (y_pred * (1 - y_pred))
-            # Per la backprop, ritorniamo la derivata
+            # Per la backprop, restituiamo la derivata
             derivative = (y_pred_clipped - y_true) / (y_pred_clipped * (1 - y_pred_clipped))
             return derivative
         
