@@ -149,13 +149,13 @@ def grid_search_cup(n_seeds_per_config=3):
     learning_rates = [0.005, 0.001, 0.002]
     l2_lambdas = [0.00005, 0.0001, 0.0005]
     momentums = [0.9, 0.95]
-    architectures = [
-        [12, 60, 4],          
-        [12, 80, 4],         
+    architectures = [     
         [12, 50, 30, 4],      
         [12, 60, 40, 4],      
         [12, 80, 60, 4],     
         [12, 60, 40, 20, 4],  
+        [12, 60, 4],          
+        [12, 80, 4]    
     ]
 
     best_val_mee = float('inf')
@@ -300,7 +300,7 @@ def retrain_with_loss_tracking(best_results):
     print(f" RI-ADDESTRAMENTO CON TRACKING LOSS")
     print(f"{'='*70}")
     print(f"LR:  {best_results['lr']}, L2: {best_results['l2_lambda']}, "
-          f"Architecture: {best_results['architecture']}, Seed: {best_results['seed']}")
+          f"Architecture: {best_results['network_structure']}, Seed: {best_results['seed']}")
     
     X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
     x_min, x_max, y_min, y_max = best_results['normalization']
