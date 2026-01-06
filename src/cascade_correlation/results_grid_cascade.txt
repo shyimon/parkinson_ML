@@ -1,0 +1,50 @@
+
+############################################################
+DATASET: monk1
+############################################################
+MIGLIORE CONFIGURAZIONE (Finale):
+Parametri: {'learning_rate': 0.2, 'patience': 60, 'tolerance': 0.001, 'max_hidden_units': 6, 'algorithm': 'rprop', 'l2_lambda': 0.0, 'epochs': 2000, 'momentum': 0.0, 'eta_plus': 1.2, 'eta_minus': 0.5}
+Train MSE (Loss): 0.000290
+Test MSE (Loss):  0.001123
+Test Accuracy:    1.0
+
+############################################################
+DATASET: monk2
+############################################################
+MIGLIORE CONFIGURAZIONE (Finale):
+Parametri: {'learning_rate': 0.24, 'patience': 60, 'tolerance': 0.001, 'max_hidden_units': 6, 'algorithm': 'quickprop', 'l2_lambda': 0.001, 'epochs': 2000, 'momentum': 0.0, 'mu': 1.5}
+Train MSE (Loss): 0.000150
+Test MSE (Loss):  0.000160
+Test Accuracy:    1.0
+
+############################################################
+DATASET: monk3
+############################################################
+MIGLIORE CONFIGURAZIONE (Finale):
+Parametri: {'learning_rate': 0.01, 'patience': 30, 'tolerance': 0.03, 'max_hidden_units': 2, 'l2_lambda': 0.1, 'algorithm': 'quickprop', 'epochs': 2000, 'momentum': 0.0, 'mu': 1.5}
+Train MSE (Loss): 0.062535
+Test MSE (Loss):  0.054864
+Test Accuracy:    0.9606481481481481
+
+############################################################
+DATASET: cup
+############################################################
+TOP 3 CONFIGURAZIONI (da Fine Grid Search):
+
+--- Rank 1 ---
+Parametri: {'learning_rate': 0.04000000000000001, 'patience': 70, 'tolerance': 0.0001, 'max_hidden_units': 20, 'algorithm': 'quickprop', 'epochs': 2000, 'momentum': 0.0, 'mu': 1.5}
+Train MEE: 16.782978
+Val MEE:   23.525320
+Test MEE:  24.716925
+
+--- Rank 2 ---
+Parametri: {'learning_rate': 0.05, 'patience': 80, 'tolerance': 0.0001, 'max_hidden_units': 20, 'algorithm': 'quickprop', 'epochs': 2000, 'momentum': 0.0, 'mu': 1.75}
+Train MEE: 92.172781
+Val MEE:   90.402928
+Test MEE:  90.296196
+
+--- Rank 3 ---
+Parametri: {'learning_rate': 0.05, 'patience': 90, 'tolerance': 0.0001, 'max_hidden_units': 20, 'algorithm': 'quickprop', 'epochs': 2000, 'momentum': 0.0, 'mu': 1.5}
+Train MEE: 92.134299
+Val MEE:   90.756010
+Test MEE:  90.923462

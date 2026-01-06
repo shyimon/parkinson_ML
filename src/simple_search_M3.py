@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from neural_network import NeuralNetwork
-from data_manipulation import return_monk3  # ← CAMBIATO DA return_monk2
+from data_manipulation import return_monk3  
 
 
 def _monk3_test(learning_rate, l2_lambda, seed, verbose=False): 
@@ -11,7 +11,7 @@ def _monk3_test(learning_rate, l2_lambda, seed, verbose=False):
     # Seed per riproducibilità
     np.random.seed(seed)
 
-    X_train, y_train, X_val, y_val, X_test, y_test = return_monk3(  # ← MONK3
+    X_train, y_train, X_val, y_val, X_test, y_test = return_monk3(  
         one_hot=True, 
         val_split=0.4,
         dataset_shuffle=True

@@ -135,8 +135,8 @@ class Neuron:
             if momentum > 0.0:
                 self.vel_w = momentum * self.vel_w + grad_w
                 self.vel_b = momentum * self.vel_b + grad_b
-                self.weights -= eta * self.vel_w 
-                self.bias -= self.vel_b
+                self.weights += eta * self.vel_w 
+                self.bias += eta * self.vel_b
             else:
                 self.weights -= eta * grad_w
                 self.bias -= eta * grad_b
@@ -172,8 +172,8 @@ class Neuron:
             inputs_array = self.inputs
     
         weight_update = self.delta * inputs_array - l2_lambda * self.weights
-        self.weights -= eta * weight_update
-        self.bias -= eta * self.delta
+        self.weights += eta * weight_update
+        self.bias += eta * self.delta
 
     def set_best_weights(self):
         self.best_weights = self.weights
