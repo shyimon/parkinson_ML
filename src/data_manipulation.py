@@ -38,7 +38,7 @@ def return_monk1(dataset_shuffle=False, one_hot=False, val_split=0.3):
     monk1_test_y = monk1_test['class'].to_numpy().reshape(-1, 1)
 
     idx = len(monk1_train_X)
-    split = int(0.5 * idx)
+    split = int((1 - val_split) * idx)
     monk1_val_X = monk1_train_X[split:]
     monk1_train_X = monk1_train_X[:split]
     monk1_val_y = monk1_train_y[split:]

@@ -2,51 +2,40 @@ import numpy as np
 import neuron as nrn
 
 class CascadeNetwork:
-    def __init__(self, n_inputs, n_outputs, learning_rate=0.1, algorithm="quickprop", l2_lambda=0.0):
-        """
-        Inizializza la rete per la Fase 0 in cui non c'è nessuna unità nascosta.
-        """
+    def __init__(self, n_inputs, n_outputs, learning_rate=0.01, algorithm="quickprop", l2_lambda=0.0):
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
         self.learning_rate = learning_rate
         self.algorithm = algorithm
         self.l2_lambda = l2_lambda
         
-        # La classe CascadeNetwork incapsula i neuroni di output 
-        # e il costruttore provvede a costruire i neuroni autonomamente
-        # secondo le regole della Cascade Correlation
         self.output_neurons = []
-        for i in range(n_outputs): # Nota che il peso del bias è già incluso nei pesi del neurone perché 
-                                   # viene creato e gestito nel costruttore della classe Neuron
-                                   # Matematicamente: (Input * Pesi) + self.bias  <-- Equivale a --> (Input * Pesi) + (1 * PesoBias)
-            neuron = nrn.Neuron(num_inputs=n_inputs, # All'inizio non ci sono neuroni nascosti (il bias è gestito a parte dalla classe Neuron)
-                                index_in_layer=i, # Per tenere traccia della posizione del neurone nelle connessioni future
-                                is_output_neuron=True, # Verifica che sia un neurone di output per il calcolo del delta
-                                activation_function_type="tanh") # Come funzione di attivazione si usa la tangente iperbolica (tanh)
-                                                                 # che mappa gli input in un range tra -1 e 1 e include già il 
-                                                                 # calcolo della derivata della funzione di attivazione 
+        for i in range(n_outputs): 
+            # Output neuron initialization
+            neuron = nrn.Neuron(num_inputs=n_inputs, 
+                                index_in_layer=i, 
+                                is_output_neuron=True, 
+                                activation_function_type="tanh") # Output range [-1, 1] per CUP normalizzato
             self.output_neurons.append(neuron)
         
-        # Qui verranno salvati i neuroni nascosti più avanti
-        # e sarà l'algoritmo in modo autonomo a decidere se e quanti aggiungerne
         self.hidden_units = []
         self.loss_history = []
         self.val_loss_history = []
+        self.test_loss_history = []
 
     def forward(self, input_pattern):
-        """
-        Calcola l'output. 
-        """
-        current_input = np.array(input_pattern)
+        current_input = np.array(input_pattern, dtype=float)
     
+        # Passaggio attraverso i neuroni nascosti esistenti
         for h_unit in self.hidden_units:
             n_weights = len(h_unit.weights)
             relevant_input = current_input[:n_weights]
             
             h_out = h_unit.feed_neuron(relevant_input)
-            
+        
             current_input = np.append(current_input, h_out)
 
+        # Calcolo output finale
         outputs = []
         for n in self.output_neurons:
             out = n.feed_neuron(current_input)
@@ -54,250 +43,183 @@ class CascadeNetwork:
             
         return np.array(outputs)
     
-    def calculate_loss(self, X, y):
-        """Calcola la loss (MSE) su un dato set (es. Validation)"""
-        if len(X) == 0: return 0.0
-        
-        total_error = 0.0
-        for i in range(len(X)):
-            pattern = X[i]
-            target_pattern = y[i]
-            outputs = self.forward(pattern)
-            
-            for idx in range(len(self.output_neurons)):
-                if isinstance(target_pattern, (list, np.ndarray)):
-                    target = target_pattern[idx]
-                else:
-                    target = target_pattern
-                output = outputs[idx]
-                total_error += 0.5 * (target - output) ** 2
-        
-        return total_error / len(X)
-    
-    def train_phase_0(self, X, y, X_val=None, y_val=None, epochs=1000, tolerance=0.01, patience=20):
-        """
-        Addestramento dei pesi Input -> Output.
-        X: Dataset di input
-        y: Target 
-        """
-        
-        if not hasattr(self, 'loss_history'):
-            self.loss_history = []
-        if not hasattr(self, 'val_loss_history'):
-            self.val_loss_history = []
-            
-        min_error = float('inf') # Inizializza il minimo errore a infinito
-        patience_counter = 0 # Contatore per la logica di early stopping
-        batch_size = len(X) # Usiamo full-batch perché la Cascade Correlation lo richiede   
-
-        for epoch in range(epochs):
-            total_error = 0.0 # L'errore viene resettato all'inizio di ogni epoca 
-            
-            for neuron in self.output_neurons: # All'inizio di ogni epoca i gradienti di ogni neurone vengono resettati
-                neuron.reset_grad_accum()
-            
-            for i in range(batch_size):
-                input_pattern = X[i]
-                target_pattern = y[i] 
-                
-                outputs = self.forward(input_pattern)
-    
-                for idx, neuron in enumerate(self.output_neurons): # enumerate per ottenere l'indice del neurone di output
-                    if isinstance(target_pattern, (list, np.ndarray)): # isinstance controlla che target_pattern sia una lista o un array numpy
-                        target = target_pattern[idx] # Estrae il target corrispondente all'output del neurone idx
-                    else:
-                        target = target_pattern # Se c'è un solo output, usa direttamente il target
-                    output = outputs[idx] # Estrae l'output del neurone numero idx
-                    
-                    error_signal = target - output # Calcolo dell'errore
-                    total_error += 0.5 * (error_signal ** 2) # Accumula l'errore quadratico medio
-                    neuron.compute_delta(error_signal) # Calcola il delta per il neurone di output
-                    output = outputs[idx]
-                    error_signal = target - output
-                    neuron.accumulate_gradients() # Accumula i gradienti per il neurone di output
-            
-            current_train_loss = total_error / batch_size
-            self.loss_history.append(current_train_loss) # Salva l'errore medio per epoca
-            
-            if X_val is not None and y_val is not None:
-                val_loss = self.calculate_loss(X_val, y_val)
-                self.val_loss_history.append(val_loss)
-
-            for neuron in self.output_neurons: # Dopo aver processato tutto il batch, aggiorna i pesi
-                neuron.apply_accumulated_gradients(
-                    eta=self.learning_rate,
-                    batch_size=batch_size,
-                    algorithm=self.algorithm,
-                    l2_lambda=self.l2_lambda
-                )
-            
-            if epoch % 100 == 0: # Stampa l'errore ogni 100 epoche
-                print(f"Epoch {epoch}: Error = {total_error:.5f}")
-
-            if total_error < min_error - tolerance: # Il miglioramento deve essere maggiore della tolleranza
-                min_error = total_error
-                patience_counter = 0 # Reset del conteggio dei fallimenti
-            else:
-                patience_counter += 1
-            
-            if patience_counter >= patience:
-                # print(f"Convergenza raggiunta (o stallo) all'epoca {epoch}. Errore finale: {total_error:.5f}")
-                break
-        
-        return total_error # Per capire se la Cascade Correlation deve aggiungere un nuovo neurone nascosto (lo aggiunge quando l'errore è alto)
-    
-    def _compute_residuals(self, X, y):
-        """
-        Calcola l'errore residuo per ogni pattern nel dataset.
-        """
-        outputs = []
-        for i in range(len(X)):
-            out = self.forward(X[i])
-            outputs.append(out)
-        outputs = np.array(outputs)
-        residuals = y - outputs
-        return residuals
-    
     def _install_candidate(self, candidate_neuron):
-        """
-        Aggiunge il neurone candidato alla rete come nuovo neurone nascosto.
-        """
+        """Aggiunge il neurone candidato alla rete."""
+        candidate_neuron.index_in_layer = len(self.hidden_units) 
         self.hidden_units.append(candidate_neuron)
+      
         for out_neuron in self.output_neurons:
-            out_neuron.weights = np.append(out_neuron.weights, 0.0)
-            out_neuron.weight_grad_accum = np.append(out_neuron.weight_grad_accum, 0.0)
-            if hasattr(out_neuron, 'vel_w'):
-                out_neuron.vel_w = np.append(out_neuron.vel_w, 0.0)
-            if hasattr(out_neuron, 'prev_weight_grad'):
-                out_neuron.prev_weight_grad = np.append(out_neuron.prev_weight_grad, 0.0)
-            if hasattr(out_neuron, 'prev_weight_update'):
-                out_neuron.prev_weight_update = np.append(out_neuron.prev_weight_update, 0.0)
-            if hasattr(out_neuron, 'rprop_step_w'):
-                out_neuron.rprop_step_w = np.append(out_neuron.rprop_step_w, 0.1) 
+            new_weight = np.random.uniform(-0.1, 0.1)
+            out_neuron.weights = np.append(out_neuron.weights, new_weight)
+            
+            out_neuron.weight_grad_accum = np.zeros_like(out_neuron.weights)
+            
+            candidate_neuron.attach_to_output(self.output_neurons)
                 
-        print(f"Neurone nascosto aggiunto. Totale neuroni nascosti: {len(self.hidden_units)}")
+        print(f"Neurone nascosto installato. Totale: {len(self.hidden_units)}")
         
-    def train(self, X, y, X_val=None, y_val=None, max_epochs=2000, tolerance=0.01, patience=50, max_hidden_units=10):
-        
+    def train(self, X_train, y_train, X_val=None, y_val=None, X_test=None, y_test=None, max_epochs=1000, tolerance=1e-5, patience=20, max_hidden_units=10):
         self.loss_history = []
         self.val_loss_history = []
+        self.test_loss_history = []
         
-        print("Inizio addestramento (Fase 0)...")
-        current_error = self.train_phase_0(X, y, X_val=X_val, y_val=y_val, epochs=max_epochs, tolerance=tolerance, patience=patience)
-        print(f"Fase 0 completata. Errore: {current_error:.5f}")
+        inputs_train = np.array(X_train)
+        inputs_val = np.array(X_val) if X_val is not None else None
+        inputs_test = np.array(X_test) if X_test is not None else None
+  
+        print("Fase 0: Addestramento iniziale (Input -> Output)...")
         
-        while current_error > tolerance and len(self.hidden_units) < max_hidden_units:
-            print(f"\n>>> Aggiunta neurone nascosto #{len(self.hidden_units) + 1} (Err: {current_error:.5f}) <<<")
-            residuals = self._compute_residuals(X, y)
-            best_candidate = self._train_candidates(X, residuals)
-            self._install_candidate(best_candidate)
-            print("Riadattamento pesi output...")
-            current_error = self.train_phase_0(X, y, X_val=X_val, y_val=y_val, epochs=max_epochs, tolerance=tolerance, patience=patience//2) 
+        self._train_output_weights(inputs_train, y_train, inputs_val, y_val, inputs_test, y_test, max_epochs, tolerance, patience)
+        
+        while len(self.hidden_units) < max_hidden_units:
+            # Calcolo residui
+            predictions = np.array([self.forward(x) for x in X_train])
+            residuals = y_train - predictions
+            mse = np.mean(residuals**2)
             
-            if current_error < tolerance:
-                print("SUCCESSO: Obiettivo raggiunto!")
+            print(f"--- Hidden Unit {len(self.hidden_units)+1} Search. Current MSE: {mse:.5f} ---")
+            
+            if mse <= tolerance:
+                print("Tolleranza raggiunta.")
                 break
-        
-        return current_error
-    
-    
-    
-    def _train_candidates(self, X, residuals, n_candidates=8, epochs=500):
-        """
-        Allena i candidati usando Gradient Ascent con MOMENTUM. Normalizza i gradienti per la dimensione del batch.
-        """
-        if len(self.hidden_units) > 0:
-            hidden_outputs_matrix = []
-            for input_p in X:
-                current_pattern_extended = np.array(input_p) 
-                
-                for h in self.hidden_units:
-                    n_w = len(h.weights)
-                    out_val = h.feed_neuron(current_pattern_extended[:n_w])
-                    current_pattern_extended = np.append(current_pattern_extended, out_val)
-                hidden_outputs_matrix.append(current_pattern_extended[len(input_p):]) 
-            
-            hidden_outputs_matrix = np.array(hidden_outputs_matrix)
-            augmented_X = np.hstack([X, hidden_outputs_matrix])
-        else:
-            augmented_X = X
-            
-        input_dim = augmented_X.shape[1]
-        batch_size = augmented_X.shape[0] 
-        
-        candidates = []
-        
-        velocities_w = [] 
-        velocities_b = []
-        
-        for i in range(n_candidates):
-            cand = nrn.Neuron(num_inputs=input_dim, index_in_layer=0, is_output_neuron=False, activation_function_type="tanh")
-            cand.weights = np.random.uniform(-0.5, 0.5, size=input_dim)
-            cand.bias = np.random.uniform(-0.5, 0.5)
-            candidates.append(cand)
-            velocities_w.append(np.zeros(input_dim))
-            velocities_b.append(0.0)
-            
-        cand_lr = self.learning_rate 
-        momentum = 0.9 
-        
-        avg_residuals = np.mean(residuals, axis=0)
-
-        for epoch in range(epochs):
-            for i, candidate in enumerate(candidates):
-                values = np.array([candidate.feed_neuron(x) for x in augmented_X])
-    
-                avg_value = np.mean(values)
-                candidate_diff = values - avg_value
-                residual_diff = residuals - avg_residuals
              
-                covariances = np.dot(candidate_diff, residual_diff) 
-                signs = np.sign(covariances)
+            best_candidate = self._train_candidates(inputs_train, residuals, n_candidates=8, epochs=max_epochs//2)
+            
+            if best_candidate is None:
+                print("Fallimento nel trovare un candidato utile.")
+                break
+            
+            # Calcoliamo le uscite del nuovo neurone per aggiungerle al dataset
+            new_feat_train = np.array([best_candidate.feed_neuron(x) for x in inputs_train]).reshape(-1, 1)
+            inputs_train = np.hstack((inputs_train, new_feat_train))
+            
+            if inputs_val is not None:
+                new_feat_val = np.array([best_candidate.feed_neuron(x) for x in inputs_val]).reshape(-1, 1)
+                inputs_val = np.hstack((inputs_val, new_feat_val))
                 
-                correlation_error = np.sum(signs * residual_diff, axis=1) 
-                act_deriv = 1.0 - values**2 
-                delta = correlation_error * act_deriv
-                
-                grad_w = np.dot(augmented_X.T, delta)
-                grad_b = np.sum(delta)
-                
-                grad_w /= batch_size
-                grad_b /= batch_size
-                
-                velocities_w[i] = (momentum * velocities_w[i]) + (cand_lr * grad_w)
-                velocities_b[i] = (momentum * velocities_b[i]) + (cand_lr * grad_b)
-                
-                candidate.weights += velocities_w[i]
-                candidate.bias += velocities_b[i]
+            if inputs_test is not None:
+                new_feat_test = np.array([best_candidate.feed_neuron(x) for x in inputs_test]).reshape(-1, 1)
+                inputs_test = np.hstack((inputs_test, new_feat_test))
+
+            self._install_candidate(best_candidate)
+            
+            print(f"Riadattamento Output Layer...")
+            self._train_output_weights(inputs_train, y_train, inputs_val, y_val, inputs_test, y_test, max_epochs, tolerance, patience)
+            
+        return self.loss_history[-1] if self.loss_history else 0.0
+    
+    def _train_output_weights(self, X, y, X_val, y_val, X_test, y_test, epochs, tolerance, patience):
+        """Allena SOLO i pesi dei neuroni di output."""
+        best_loss = float('inf')
+        patience_cnt = 0
         
-        best_candidate = None
+        # Salvataggio pesi
+        best_w = [n.weights.copy() for n in self.output_neurons]
+        best_b = [n.bias for n in self.output_neurons]
+        
+        for epoch in range(epochs):
+            for i in range(len(X)):
+                inputs = X[i]
+                target = y[i]
+            
+                outputs = []
+                for n in self.output_neurons:
+                    outputs.append(n.feed_neuron(inputs))
+                outputs = np.array(outputs)
+                
+                errors = target - outputs
+                
+                for j, n in enumerate(self.output_neurons):
+                    n.compute_delta(errors[j]) 
+            
+            for n in self.output_neurons:
+                n.update_weights(self.learning_rate, self.l2_lambda)
+            
+            curr_preds = np.array([[n.feed_neuron(X[k]) for n in self.output_neurons] for k in range(len(X))])
+            train_mse = np.mean((y - curr_preds)**2)
+            self.loss_history.append(train_mse)
+           
+            val_mse = train_mse 
+            if X_val is not None:
+                val_preds = np.array([[n.feed_neuron(X_val[k]) for n in self.output_neurons] for k in range(len(X_val))])
+                val_mse = np.mean((y_val - val_preds)**2)
+                self.val_loss_history.append(val_mse)
+        
+            if X_test is not None:
+                test_preds = np.array([[n.feed_neuron(X_test[k]) for n in self.output_neurons] for k in range(len(X_test))])
+                test_mse = np.mean((y_test - test_preds)**2)
+                self.test_loss_history.append(test_mse)
+            
+            if val_mse < best_loss - 1e-6:
+                best_loss = val_mse
+                best_w = [n.weights.copy() for n in self.output_neurons]
+                best_b = [n.bias for n in self.output_neurons]
+                patience_cnt = 0
+            else:
+                patience_cnt += 1
+                
+            if patience_cnt >= patience:
+                for j, n in enumerate(self.output_neurons):
+                    n.weights = best_w[j]
+                    n.bias = best_b[j]
+                break
+                
+            if train_mse < tolerance:
+                break
+
+    def _train_candidates(self, X, residuals, n_candidates=8, epochs=100):
+        """Allena pool di candidati per massimizzare la correlazione con l'errore residuo."""
+        input_dim = X.shape[1]
+        
+        # Crea candidati
+        candidates = []
+        for _ in range(n_candidates):
+            cand = nrn.Neuron(num_inputs=input_dim, index_in_layer=0, is_output_neuron=False, activation_function_type="tanh")
+            cand.weights = np.random.uniform(-1, 1, size=input_dim) 
+            candidates.append(cand)
+            
+        lr_cand = self.learning_rate 
+        
+        res_mean = np.mean(residuals, axis=0)
+        
+        for epoch in range(epochs):
+            for cand in candidates:
+                values = np.array([cand.feed_neuron(x) for x in X])
+                
+                # Calcola Correlazione S
+                v_mean = np.mean(values)
+                cand_diff = values - v_mean       
+                res_diff = residuals - res_mean   
+                
+                cov = np.sum(cand_diff[:, None] * res_diff, axis=0) 
+                signs = np.sign(cov)
+                
+                error_term = np.sum(signs * res_diff, axis=1) 
+                
+                derivs = 1.0 - values**2 
+                
+                delta = error_term * derivs
+                
+                grad_w = np.dot(delta, X) / len(X)
+                grad_b = np.mean(delta)
+                
+                cand.weights += lr_cand * grad_w
+                cand.bias += lr_cand * grad_b
+
+        # Selezione vincitore
+        best_cand = None
         best_score = -1.0
         
-        for candidate in candidates:
-            values = np.array([candidate.feed_neuron(x) for x in augmented_X])
-            score = self._compute_correlation_score(values, residuals)
+        for cand in candidates:
+            values = np.array([cand.feed_neuron(x) for x in X])
+            v_mean = np.mean(values)
+            res_diff = residuals - res_mean
+            cov = np.sum((values - v_mean)[:, None] * res_diff, axis=0)
+            score = np.sum(np.abs(cov))
+            
             if score > best_score:
                 best_score = score
-                best_candidate = candidate
+                best_cand = cand
                 
-        print(f"Miglior candidato selezionato. Score: {best_score:.5f}")
-        return best_candidate
-    
-    def _compute_correlation_score(self, candidate_values, residuals):
-        """
-        Calcola il punteggio di correlazione tra le uscite del candidato e l'errore residuo.
-        """
-        v_mean = np.mean(candidate_values)
-        r_mean = np.mean(residuals, axis=0)
-        
-        term1= candidate_values - v_mean
-        term2 = residuals - r_mean
-        
-        covariances = np.sum(term1[:, None] * term2, axis=0)
-        
-        S = np.sum(np.abs(covariances))
-        return S
-    
-    def compute_mee(self, y_true, y_pred):
-        euclidean_distances = np.sqrt(np.sum((y_true - y_pred) ** 2, axis=1))
-        return(np.mean(euclidean_distances))
+        print(f"Miglior Candidato Score: {best_score:.4f}")
+        return best_cand
