@@ -82,7 +82,7 @@ def _monk2_test(learning_rate, seed, verbose=False):
 
 def grid_search_lr(n_seeds_per_lr=10, learning_rates=None):
     if learning_rates is None: 
-        learning_rates = [0.1, 0.15, 0.2, 0.25, 0.3, 0.4]
+        learning_rates = [0.005, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
     
     best_val_acc = 0
     best_results = None
@@ -399,7 +399,7 @@ if __name__ == "__main__":
         print("\n FASE 1: Grid Search (Train + Validation)")
         best_results, all_results = grid_search_lr(
             n_seeds_per_lr=10,
-            learning_rates=[0.1, 0.15, 0.2, 0.25, 0.3, 0.4]
+            learning_rates=[0.005, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
         )
         # FILTRA solo configurazioni con 100% su train, val e test
         print(f"\n🔍 Filtraggio configurazioni con 100% accuracy...")
