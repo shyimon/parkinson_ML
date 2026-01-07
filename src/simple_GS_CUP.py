@@ -241,13 +241,13 @@ def retrain_with_loss_tracking(best_results):
     net = NeuralNetwork(**params)
     
     # Training manuale epoch-by-epoch
-    train_loss_history = []
-    val_loss_history = []
+    train_mse_history = []
+    val_mee_history = []
     
     epochs = 2000
     batch_size = 16
     patience = 300
-    best_val_loss = float('inf')
+    best_val_mee = float('inf')
     patience_counter = 0
     
     print(f"\n Training in corso (max {epochs} epochs)...")
@@ -262,21 +262,24 @@ def retrain_with_loss_tracking(best_results):
                        epochs=epochs, batch_size=batch_size, patience=patience, verbose=False)
             break
         
-        # Calcola LOSS (Half MSE normalizzata)
+        # Calcola MSE per Training (denormalizzato)
         train_pred_norm = net.predict(X_train_norm)
-        train_loss = 0.5 * np. mean((train_pred_norm - y_train_norm) ** 2)
-        
+        train_pred = denormalize(train_pred_norm, -1, 1, y_min, y_max)
+        train_mse = MSE(y_train, train_pred)
+
+        # Calcola MEE per validation (denormalizzato)
         val_pred_norm = net.predict(X_val_norm)
-        val_loss = 0.5 * np.mean((val_pred_norm - y_val_norm) ** 2)
+        val_pred = denormalize(val_pred_norm, -1, 1, y_min, y_max)
+        val_mee = MEE(y_val, val_pred)
         
-        train_loss_history. append(train_loss)
-        val_loss_history.append(val_loss)
+        train_mse_history.append(train_mse)
+        val_mee_history.append(val_mee)
         
-        # Early stopping
-        if val_loss < best_val_loss: 
-            best_val_loss = val_loss
+        #  Early stopping su MEE
+        if val_mee < best_val_mee:
+            best_val_mee = val_mee
             patience_counter = 0
-        else: 
+        else:
             patience_counter += 1
         
         if patience_counter >= patience:
@@ -284,13 +287,13 @@ def retrain_with_loss_tracking(best_results):
             break
         
         if (epoch + 1) % 200 == 0:
-            print(f"  Epoch {epoch+1}/{epochs} - Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
+            print(f"  Epoch {epoch+1}/{epochs} - Train MSE: {train_mse:.6f}, Val MEE: {val_mee:.6f}")
     
-    print(f"\n Training completato dopo {len(train_loss_history)} epoche")
-    print(f"   Final Train Loss: {train_loss_history[-1]:.6f}")
-    print(f"   Final Val Loss:   {val_loss_history[-1]:.6f}")
+    print(f"\n Training completato dopo {len(train_mse_history)} epoche")
+    print(f"   Final Train MSE: {train_mse_history[-1]:. 6f}")
+    print(f"   Best Val MEE:     {best_val_mee:.6f}")
     
-    return train_loss_history, val_loss_history, net
+    return train_mse_history, val_mee_history, net
 
 def retrain_with_loss_tracking(best_results):
     """
@@ -300,7 +303,7 @@ def retrain_with_loss_tracking(best_results):
     print(f" RI-ADDESTRAMENTO CON TRACKING LOSS")
     print(f"{'='*70}")
     print(f"LR:  {best_results['lr']}, L2: {best_results['l2_lambda']}, "
-          f"Architecture: {best_results['architecture']}, Seed: {best_results['seed']}")
+          f"Architecture: {best_results['network:structure']}, Seed: {best_results['seed']}")
     
     X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
     x_min, x_max, y_min, y_max = best_results['normalization']
@@ -486,75 +489,93 @@ def plot_results(train_results, train_mee_history, val_mee_history, test_results
     print(f"\n Grafico salvato in: {save_path}")
     plt.show()
 
-def plot_loss_history(train_loss_history, val_loss_history, best_results, 
+def plot_loss_history(train_mse_history, val_mee_history, best_results, 
                      save_path='cup_loss_vs_epochs.png'):
     """
-    Crea grafico Loss vs Epochs (come MONK-1/2/3)
+    Crea grafico MSE (train) e MEE (validation) vs Epochs con doppio asse Y
     """
     print(f"\n{'='*70}")
     print(f" CREAZIONE GRAFICO LOSS VS EPOCHS")
     print(f"{'='*70}")
     
-    if len(train_loss_history) == 0 or len(val_loss_history) == 0:
-        print(" Nessuna history disponibile!")
+    # Verifica che ci siano dati
+    if len(train_mse_history) == 0 or len(val_mee_history) == 0:
+        print("  Nessuna history disponibile!")
         return
     
-    epochs = range(1, len(train_loss_history) + 1)
+    epochs = range(1, len(train_mse_history) + 1)
     
-    # SMOOTHING
-    def smooth_curve(values, weight=0.98):
-        smoothed = []
-        last = values[0] if values else 0
-        for point in values:
-            smoothed_val = last * weight + (1 - weight) * point
-            smoothed.append(smoothed_val)
-            last = smoothed_val
-        return smoothed
+    # Smoothing delle curve
+    train_smooth = smooth_curve(train_mse_history, weight=0.95)
+    val_smooth = smooth_curve(val_mee_history, weight=0.95)
     
-    train_smooth = smooth_curve(train_loss_history, weight=0.98)
-    val_smooth = smooth_curve(val_loss_history, weight=0.98)
+    # Crea figura con doppio asse Y
+    fig, ax1 = plt. subplots(figsize=(12, 7))
+    ax2 = ax1.twinx()
     
-    # PLOT
-    fig, ax = plt.subplots(figsize=(11, 7))
+    # MSE su asse sinistro (blu)
+    line1 = ax1.plot(epochs, train_smooth, label='Training MSE', 
+                     color='#1F618D', linewidth=2.5)
+    ax1.set_ylabel('MSE (Training)', fontsize=13, fontweight='bold', color='#1F618D')
+    ax1.tick_params(axis='y', labelcolor='#1F618D')
+    ax1.set_xlabel('Epochs', fontsize=13, fontweight='bold')
     
-    ax.plot(epochs, train_smooth, label='Training Loss', 
-           color='#1F618D', linewidth=2)
+    # MEE su asse destro (rosso)
+    line2 = ax2.plot(epochs, val_smooth, label='Validation MEE', 
+                     color='#E74C3C', linewidth=2.5)
+    ax2.set_ylabel('MEE (Validation)', fontsize=13, fontweight='bold', color='#E74C3C')
+    ax2.tick_params(axis='y', labelcolor='#E74C3C')
     
-    ax.plot(epochs, val_smooth, label='Validation Loss', 
-           color='#E74C3C', linewidth=2)
-    
-    # OPTIMAL EPOCH
+    # Trova optimal epoch (minimo MEE)
     min_val_idx = np.argmin(val_smooth)
     optimal_epoch = min_val_idx + 1
-    optimal_loss = val_smooth[min_val_idx]
+    optimal_mee = val_smooth[min_val_idx]
+    optimal_mse = train_smooth[min_val_idx]
     
-    ax.axvline(x=optimal_epoch, color='green', linestyle=':', 
-              linewidth=2.5, alpha=0.7, label=f'Optimal: {optimal_epoch} epochs')
+    # Linea verticale all'optimal epoch
+    ax1.axvline(x=optimal_epoch, color='green', linestyle=':', 
+                linewidth=2.5, alpha=0.7, 
+                label=f'Optimal:  epoch {optimal_epoch}')
     
-    ax.scatter([optimal_epoch], [optimal_loss], color='gold', 
-              s=400, marker='*', zorder=11, edgecolors='darkgreen', linewidths=3)
+    # Stella dorata sull'optimal epoch
+    ax1.scatter([optimal_epoch], [optimal_mse], color='gold', 
+                s=400, marker='*', zorder=11, 
+                edgecolors='darkgreen', linewidths=3)
     
-    # FORMATTING
-    ax.set_xlabel('Epochs', fontsize=13, fontweight='bold')
-    ax.set_ylabel('Half MSE Loss (normalized)', fontsize=13, fontweight='bold')
-    ax.set_title(f'Training and Validation Loss vs Epochs - CUP\n'
-                f'(LR={best_results["lr"]}, L2={best_results["l2_lambda"]}, '
-                f'Architecture={best_results["network_structure"]})', 
-                fontsize=14, fontweight='bold', pad=15)
-    ax.legend(fontsize=11, loc='upper right', framealpha=0.95, edgecolor='black')
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    # Titolo con parametri
+    ax1.set_title(f'Training MSE & Validation MEE vs Epochs - CUP\n'
+                  f'(LR={best_results["lr"]}, L2={best_results["l2_lambda"]}, '
+                  f'Architecture={best_results["network_structure"]})', 
+                  fontsize=14, fontweight='bold', pad=15)
     
-    # LIMITI
-    y_max = max(max(train_smooth), max(val_smooth))
-    y_min = min(min(train_smooth), min(val_smooth))
-    y_range = y_max - y_min if y_max > y_min else 0.001
+    # Legenda combinata
+    lines = line1 + line2
+    labels = [l. get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper right', fontsize=11, 
+              framealpha=0.95, edgecolor='black')
     
-    ax.set_ylim(max(0, y_min - 0.05 * y_range), y_max + 0.15 * y_range)
-    ax.set_xlim(0, len(epochs) * 1.02)
+    # Grid
+    ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
     
+    # Imposta limiti assi
+    ax1.set_xlim(0, len(epochs) * 1.02)
+    
+    # Aggiungi margini agli assi Y
+    mse_min, mse_max = min(train_smooth), max(train_smooth)
+    mse_range = mse_max - mse_min
+    ax1.set_ylim(max(0, mse_min - 0.05 * mse_range), mse_max + 0.15 * mse_range)
+    
+    mee_min, mee_max = min(val_smooth), max(val_smooth)
+    mee_range = mee_max - mee_min
+    ax2.set_ylim(max(0, mee_min - 0.05 * mee_range), mee_max + 0.15 * mee_range)
+    
+    # Salva e mostra
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"\n Grafico salvato in: {save_path}")
+    print(f"\n Grafico salvato in:  {save_path}")
+    print(f" Optimal epoch: {optimal_epoch}")
+    print(f"   - MSE at optimal:  {optimal_mse:.6f}")
+    print(f"   - MEE at optimal: {optimal_mee:.6f}")
     plt.show()
 
 def plot_predictions_vs_actual(best_results, test_results, save_path='cup_predictions_vs_actual.png'):
@@ -562,7 +583,7 @@ def plot_predictions_vs_actual(best_results, test_results, save_path='cup_predic
     Crea un grafico 2x2 con predizioni vs valori reali per tutti i 4 target
     """
     print(f"\n{'='*70}")
-    print(f"📊 CREAZIONE GRAFICO PREDIZIONI VS VALORI REALI")
+    print(f" CREAZIONE GRAFICO PREDIZIONI VS VALORI REALI")
     print(f"{'='*70}")
     
     X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
@@ -636,12 +657,12 @@ if __name__ == "__main__":
         
         # FASE 2: RE-TRAINING CON TRACKING
         print(f"\n FASE 2: Re-training con tracking loss epoch-by-epoch")
-        train_loss_history, val_loss_history, final_net = retrain_with_loss_tracking(best_results)
+        train_mse_history, val_mee_history, final_net = retrain_with_loss_tracking(best_results)
         
         # FASE 3: GRAFICO LOSS VS EPOCHS
         print(f"\n FASE 3: Grafico Loss vs Epochs")
-        plot_loss_history(train_loss_history, val_loss_history, best_results, 
-                         save_path='cup_loss_vs_epochs.png')
+        plot_loss_history(train_mse_history, val_mee_history, best_results, 
+                 save_path='cup_loss_vs_epochs.png')
         
         # FASE 4: Test Set
         print(f"\n FASE 4: Valutazione Test Set")
