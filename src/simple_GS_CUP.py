@@ -234,7 +234,7 @@ def retrain_with_loss_tracking(best_results):
     y_train_norm = normalize(y_train, -1, 1, y_min, y_max)
     y_val_norm = normalize(y_val, -1, 1, y_min, y_max)
     
-    np. random.seed(best_results['seed'])
+    np.random.seed(best_results['seed'])
     
     # Ricrea rete
     params = best_results['params'].copy()
@@ -290,7 +290,7 @@ def retrain_with_loss_tracking(best_results):
             print(f"  Epoch {epoch+1}/{epochs} - Train MSE: {train_mse:.6f}, Val MEE: {val_mee:.6f}")
     
     print(f"\n Training completato dopo {len(train_mse_history)} epoche")
-    print(f"   Final Train MSE: {train_mse_history[-1]:. 6f}")
+    print(f"   Final Train MSE: {train_mse_history[-1]:.6f}")
     print(f"   Best Val MEE:     {best_val_mee:.6f}")
     
     return train_mse_history, val_mee_history, net
@@ -510,7 +510,7 @@ def plot_loss_history(train_mse_history, val_mee_history, best_results,
     val_smooth = smooth_curve(val_mee_history, weight=0.95)
     
     # Crea figura con doppio asse Y
-    fig, ax1 = plt. subplots(figsize=(12, 7))
+    fig, ax1 = plt.subplots(figsize=(12, 7))
     ax2 = ax1.twinx()
     
     # MSE su asse sinistro (blu)
@@ -550,7 +550,7 @@ def plot_loss_history(train_mse_history, val_mee_history, best_results,
     
     # Legenda combinata
     lines = line1 + line2
-    labels = [l. get_label() for l in lines]
+    labels = [l.get_label() for l in lines]
     ax1.legend(lines, labels, loc='upper right', fontsize=11, 
               framealpha=0.95, edgecolor='black')
     
@@ -623,7 +623,7 @@ def plot_predictions_vs_actual(best_results, test_results, save_path='cup_predic
         all_vals = np.concatenate([y_test[:, i], predictions[:, i]])
         margin = (all_vals.max() - all_vals.min()) * 0.05
         ax.set_xlim(all_vals.min() - margin, all_vals.max() + margin)
-        ax.set_ylim(all_vals. min() - margin, all_vals.max() + margin)
+        ax.set_ylim(all_vals.min() - margin, all_vals.max() + margin)
         ax.set_aspect('equal', 'box')
     
     
@@ -696,4 +696,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n ERRORE: {e}")
         import traceback
-        traceback. print_exc()
+        traceback.print_exc()

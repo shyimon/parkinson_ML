@@ -145,6 +145,15 @@ def return_CUP(dataset_shuffle=True, train_size=250, validation_size=125, test_s
     cup_test_y = cup_test[['t_1','t_2','t_3','t_4']].to_numpy()
     
     return cup_train_X, cup_train_y, cup_val_X, cup_val_y, cup_test_X, cup_test_y
+
+def return_CUP_TS():
+    cols = ["id"] + [f"in_{i}" for i in range(1, 13)]
+    cup = pd.read_csv("data/ML-CUP25-TS.csv", comment="#", names=cols)
+    pd.set_option("display.precision", 3)
+
+    cup = cup.drop(columns=['id']).to_numpy()
+    return cup
+
     
 
 def normalize(X, min, max, x_min, x_max):
