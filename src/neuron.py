@@ -125,23 +125,50 @@ class Neuron:
         eta = kwargs.get("eta", 0.1)
         batch_size = kwargs.get("batch_size", 1)
         algorithm = kwargs.get("algorithm", 'sgd')
-        
-        if algorithm == 'sgd':
+    
+        if algorithm == 'sgd': 
             l2_lambda = kwargs.get('l2_lambda', 0.0)
             momentum = kwargs.get('momentum', 0.0)
             grad_w = self.weight_grad_accum / batch_size
             grad_b = self.bias_grad_accum / batch_size  
 
-            if momentum > 0.0:
-                self.vel_w = momentum * self.vel_w + grad_w
-                self.vel_b = momentum * self.vel_b + grad_b
-                self.weights += eta * self.vel_w 
-                self.bias += eta * self.vel_b
-            else:
-                self.weights -= eta * grad_w
-                self.bias -= eta * grad_b
+        if momentum > 0.0:
+            # Accumula velocità con momentum
+            self.vel_w = momentum * self.vel_w + grad_w
+            self.vel_b = momentum * self.vel_b + grad_b
+            # CORREZIONE: Sottrai invece di aggiungere (gradient DESCENT)
+            self.weights -= eta * self.vel_w  # ← CAMBIATO DA += A -=
+            self.bias -= eta * self.vel_b      # ← CAMBIATO DA += A -=
+        else: 
+            self.weights -= eta * grad_w
+            self.bias -= eta * grad_b
+        
+        # Applica L2 regularization
+        if l2_lambda > 0.0:
+            self.weights -= eta * l2_lambda * self.weights
 
         elif algorithm == 'rprop':
+            eta_plus = kwargs.get('eta_plus', 1.2)
+            eta_minus = kwargs.get('eta_minus', 0.5)
+            delta_min = kwargs.get('delta_min', 1e-6)
+            delta_max = kwargs.get('delta_max', 50.0)
+            l2_lambda = kwargs.get('l2_lambda', 0.0)
+        
+            self.update_weights_rprop(batch_size, eta_plus, eta_minus, delta_min, delta_max, l2_lambda)
+            self.reset_grad_accum() 
+    
+        elif algorithm == 'quickprop':
+            mu = kwargs.get('mu', 1.75)
+            decay = kwargs.get('decay', -0.0001)
+        
+            self.update_weights_quickprop(batch_size, eta, mu, decay)
+            self.reset_grad_accum()
+    
+        # Reset accumulatori
+        self.weight_grad_accum.fill(0.0)
+        self.bias_grad_accum = 0.0
+
+        if algorithm == 'rprop':
             eta_plus = kwargs.get('eta_plus', 1.2)
             eta_minus = kwargs.get('eta_minus', 0.5)
             delta_min = kwargs.get('delta_min', 1e-6)
