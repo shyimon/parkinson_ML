@@ -1,5 +1,5 @@
 import numpy as np
-import matplotlib. pyplot as plt
+import matplotlib.pyplot as plt
 from neural_network import NeuralNetwork
 from data_manipulation import return_monk2
 
@@ -9,7 +9,7 @@ def _monk2_test(learning_rate, seed, verbose=False):
         print(f"  Seed: {seed}, LR: {learning_rate}")
     
     # Seed per riproducibilità
-    np.random. seed(seed)
+    np.random.seed(seed)
 
     X_train, y_train, X_val, y_val, X_test, y_test = return_monk2(
         one_hot=True, 
@@ -249,6 +249,196 @@ def plot_results(train_results, test_results, save_path='monk2_performance.png')
     print(f"\n Grafico Model Performance salvato in: {save_path}")
     plt.show()
 
+def plot_loss_vs_epochs(result, save_path='monk2_loss_vs_epochs.png'):
+    """
+    NUOVO: Grafico della Half MSE Loss in funzione delle epoche per Train e Validation
+    """
+    save_path = save_path.strip().replace(' ', '')
+    
+    print(f"\n{'='*70}")
+    print(f"  CREAZIONE GRAFICO Loss vs Epoche (Half MSE)")
+    print(f"{'='*70}")
+    
+    X_train, y_train, X_val, y_val, X_test, y_test = result['data']
+    np.random.seed(result['seed'])
+    
+    params = result['params'].copy()
+    net = NeuralNetwork(**params)
+    
+    train_losses = []
+    val_losses = []
+    epochs_list = []
+    
+    max_epochs = 2000
+    batch_size = 1
+    patience = 200
+    best_val_loss = float('inf')
+    patience_counter = 0
+    
+    print("Re-training del modello migliore con tracking delle loss...")
+    
+    for epoch in range(max_epochs):
+        try:
+            net.fit(X_train, y_train, X_val, y_val, epochs=1, batch_size=batch_size, verbose=False)
+        except:  
+            break
+        
+        train_pred = net.predict(X_train)
+        train_loss = 0.5 * np.mean((train_pred - y_train)**2)
+        
+        val_pred = net.predict(X_val)
+        val_loss = 0.5 * np.mean((val_pred - y_val)**2)
+        
+        epochs_list.append(epoch + 1)
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+        
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            patience_counter = 0
+        else: 
+            patience_counter += 1
+        
+        if patience_counter >= patience:
+            print(f"Early stopping at epoch {epoch + 1}")
+            break
+        
+        if (epoch + 1) % 100 == 0:
+            print(f"  Epoca {epoch + 1}/{max_epochs} - Train Loss: {train_loss:.6f}, Val Loss: {val_loss:.6f}")
+    
+    print(f" Re-training completato:  {len(epochs_list)} epoche")
+    
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    ax.plot(epochs_list, train_losses, color='#1F618D', linewidth=2.5, 
+           label='Training Loss (Half MSE)', alpha=0.9)
+    ax.plot(epochs_list, val_losses, color='#CB4335', linewidth=2.5, 
+           label='Validation Loss (Half MSE)', alpha=0.9)
+    
+    min_val_idx = np.argmin(val_losses)
+    min_val_epoch = epochs_list[min_val_idx]
+    min_val_loss = val_losses[min_val_idx]
+    
+    ax.axvline(x=min_val_epoch, color='green', linestyle=':', 
+              linewidth=2.5, alpha=0.7, label=f'Min Val Loss @ epoch {min_val_epoch}')
+    ax.scatter([min_val_epoch], [min_val_loss], color='green', 
+              s=200, marker='*', zorder=11, edgecolors='black', linewidths=2,
+              label=f'Min Val Loss:  {min_val_loss:.6f}')
+    
+    ax.set_xlabel('Epochs', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Half MSE Loss', fontsize=14, fontweight='bold')
+    ax.set_title(f'Training and Validation Loss vs Epochs (MONK-2)\nLR={result["lr"]}, Seed={result["seed"]}', 
+                fontsize=15, fontweight='bold', pad=15)
+    ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+    ax.set_xlim(0, max(epochs_list) * 1.02)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    print(f"📊 Grafico Loss vs Epochs salvato in: {save_path}")
+    plt.show()
+    
+    return net, train_losses, val_losses
+
+
+def plot_accuracy_vs_epochs(result, save_path='monk2_accuracy_vs_epochs.png'):
+    """
+    NUOVO: Grafico dell'Accuracy in funzione delle epoche per Train e Validation
+    """
+    save_path = save_path.strip().replace(' ', '')
+    
+    print(f"\n{'='*70}")
+    print(f"  CREAZIONE GRAFICO Accuracy vs Epoche")
+    print(f"{'='*70}")
+    
+    X_train, y_train, X_val, y_val, X_test, y_test = result['data']
+    np.random.seed(result['seed'])
+    
+    params = result['params'].copy()
+    net = NeuralNetwork(**params)
+    
+    train_accuracies = []
+    val_accuracies = []
+    epochs_list = []
+    
+    max_epochs = 2000
+    batch_size = 1
+    patience = 200
+    best_val_loss = float('inf')
+    patience_counter = 0
+    
+    print("Re-training del modello migliore con tracking delle accuracy...")
+    
+    for epoch in range(max_epochs):
+        try:
+            net.fit(X_train, y_train, X_val, y_val, epochs=1, batch_size=batch_size, verbose=False)
+        except: 
+            break
+        
+        train_pred = net.predict(X_train)
+        train_pred_class = (train_pred > 0.5).astype(int)
+        train_acc = np.mean(train_pred_class == y_train)
+        
+        val_pred = net.predict(X_val)
+        val_pred_class = (val_pred > 0.5).astype(int)
+        val_acc = np.mean(val_pred_class == y_val)
+        
+        val_loss = 0.5 * np.mean((val_pred - y_val)**2)
+        
+        epochs_list.append(epoch + 1)
+        train_accuracies.append(train_acc)
+        val_accuracies.append(val_acc)
+        
+        if val_loss < best_val_loss: 
+            best_val_loss = val_loss
+            patience_counter = 0
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= patience:
+            print(f"Early stopping at epoch {epoch + 1}")
+            break
+        
+        if (epoch + 1) % 100 == 0:
+            print(f"  Epoca {epoch + 1}/{max_epochs} - Train Acc: {train_acc:.4%}, Val Acc: {val_acc:.4%}")
+    
+    print(f" Re-training completato: {len(epochs_list)} epoche")
+    
+    fig, ax = plt.subplots(figsize=(12, 7))
+    
+    ax.plot(epochs_list, train_accuracies, color='#3498db', linewidth=2.5, 
+           label='Training Accuracy', alpha=0.9)
+    ax.plot(epochs_list, val_accuracies, color='#e67e22', linewidth=2.5, 
+           label='Validation Accuracy', alpha=0.9)
+    
+    max_val_idx = np.argmax(val_accuracies)
+    max_val_epoch = epochs_list[max_val_idx]
+    max_val_acc = val_accuracies[max_val_idx]
+    
+    ax.axvline(x=max_val_epoch, color='green', linestyle=':', 
+              linewidth=2.5, alpha=0.7, label=f'Max Val Acc @ epoch {max_val_epoch}')
+    ax.scatter([max_val_epoch], [max_val_acc], color='green', 
+              s=200, marker='*', zorder=11, edgecolors='black', linewidths=2,
+              label=f'Max Val Acc: {max_val_acc:.2%}')
+    
+    ax.axhline(y=1.0, color='green', linestyle='--', linewidth=2, 
+               alpha=0.5, label='100% Target')
+    
+    ax.set_xlabel('Epochs', fontsize=14, fontweight='bold')
+    ax.set_ylabel('Accuracy', fontsize=14, fontweight='bold')
+    ax.set_title(f'Training and Validation Accuracy vs Epochs (MONK-2)\nLR={result["lr"]}, Seed={result["seed"]}', 
+                fontsize=15, fontweight='bold', pad=15)
+    ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
+    ax.set_xlim(0, max(epochs_list) * 1.02)
+    ax.set_ylim(0, 1.05)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    print(f" Grafico Accuracy vs Epochs salvato in: {save_path}")
+    plt.show()
+    
+    return net, train_accuracies, val_accuracies
 
 def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='monk2_bias_variance_epochs.png'):
     from collections import defaultdict
@@ -275,7 +465,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='mon
         np.random.seed(result['seed'])
         
         # Ricrea la rete
-        params = result['params']. copy()
+        params = result['params'].copy()
         net = NeuralNetwork(**params)
         
         train_losses_run = []
@@ -455,7 +645,7 @@ if __name__ == "__main__":
         
         print(f"\nTop 3 configurazioni selezionate:")
         for idx, res in enumerate(top_3_results, 1):
-            print(f"  {idx}. LR={res['lr']}, Seed={res['seed']}, Val Acc={res['val_accuracy']:.2%}")
+            print(f"  {idx}LR={res['lr']}, Seed={res['seed']}, Val Acc={res['val_accuracy']:.2%}")
         
         print(f"\n Training ensemble models...")
         ensemble_nets = []
@@ -476,7 +666,7 @@ if __name__ == "__main__":
         ensemble_preds = []
         for net in ensemble_nets:
             pred = net.predict(X_test)
-            ensemble_preds. append(pred)
+            ensemble_preds.append(pred)
         
         # Media delle predizioni
         ensemble_pred_avg = np.mean(ensemble_preds, axis=0)
@@ -613,7 +803,7 @@ if __name__ == "__main__":
         
         print(f"\n File salvati:")
         print(f"  - monk2_bias_variance_epochs.png (bias-variance vs epoche)")
-        print(f"  - monk2_performance. png (singolo modello)")
+        print(f"  - monk2_performance.png (singolo modello)")
         if ensemble_acc >= test_results['test_accuracy']:
             print(f"  - monk2_performance_ENSEMBLE.png (ensemble) ")
         

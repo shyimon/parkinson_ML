@@ -9,7 +9,7 @@ def _monk1_test(learning_rate, seed, verbose=False):
         print(f"  Seed: {seed}, LR: {learning_rate}")
     
     # Seed per riproducibilità
-    np. random.seed(seed)
+    np.random.seed(seed)
 
     # Carica i dati MONK-1
     X_train, y_train, X_val, y_val, X_test, y_test = return_monk1(
@@ -20,7 +20,7 @@ def _monk1_test(learning_rate, seed, verbose=False):
     
     
     params = {
-        'network_structure': [17, 4, 1],
+        'network_structure': [17, 5, 1],
         'eta': learning_rate,
         'l2_lambda': 0.0,
         'momentum': 0.9,
@@ -153,6 +153,9 @@ def evaluate_on_test_set(net, X_test, y_test):
     test_pred_class = (test_pred > 0.5).astype(int)
     test_acc = np.mean(test_pred_class == y_test)
     test_error = 1 - test_acc
+
+    # CALCOLO HALF MSE SUL TEST SET
+    test_half_mse = (1/2) * np.mean((test_pred - y_test)**2)
     
     # Confusion matrix
     tp = np.sum((test_pred_class == 1) & (y_test == 1))
@@ -235,7 +238,7 @@ def plot_results(train_results, test_results, save_path='monk1_performance.png')
     # Testo nelle celle
     for i in range(2):
         for j in range(2):
-            text_color = 'white' if confusion_data[i, j] > confusion_data. max()/2 else 'black'
+            text_color = 'white' if confusion_data[i, j] > confusion_data.max()/2 else 'black'
             plt.text(j, i, str(confusion_data[i, j]), 
                     ha='center', va='center', 
                     fontsize=28, fontweight='bold',
@@ -256,14 +259,14 @@ def plot_results(train_results, test_results, save_path='monk1_performance.png')
 
 def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='monk1_bias_variance_epochs.png'):
     """
-    Crea il grafico Bias-Variance Tradeoff con EPOCHE come model complexity
-    Mostra training e test error vs numero di epoche di training
-    Con curve SMOOTH (no oscillazioni)
+    Crea grafici per: 
+    1. Loss (Half MSE) vs Epoche per Training e Validation
+    2. Accuracy vs Epoche per Training e Validation
     """
     from collections import defaultdict
     
     print(f"\n{'='*70}")
-    print(f"CREAZIONE GRAFICO LOSS VS EPOCHE")
+    print(f"CREAZIONE GRAFICI LOSS E ACCURACY VS EPOCHE")
     print(f"{'='*70}")
     
     # RE-TRAINING DI ALCUNI MODELLI CON TRACKING
@@ -282,11 +285,13 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
         np.random.seed(result['seed'])
         
         # Ricrea la rete
-        params = result['params']. copy()
+        params = result['params'].copy()
         net = NeuralNetwork(**params)
         
         train_losses_run = []
         val_losses_run = []
+        train_accs_run = []
+        val_accs_run = []
         epochs_run = []
         
         max_epochs = 400
@@ -295,28 +300,32 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
         for epoch in range(max_epochs):
             try:
                 net.fit(X_train, y_train, X_val, y_val, epochs=1, batch_size=batch_size, verbose=False)
-            except: 
+            except:  
                 break
             
-            # Training error
+            # Training metrics
             train_pred = net.predict(X_train)
-            train_loss = (1/2) * np.mean((train_pred - y_train)**2) #MSE LOSS
+            train_loss = (1/2) * np.mean((train_pred - y_train)**2)  # HALF MSE LOSS
+            train_pred_class = (train_pred > 0.5).astype(int)
+            train_acc = np.mean(train_pred_class == y_train)
             
-            # Validation error 
+            # Validation metrics
             val_pred = net.predict(X_val)
-            val_loss = (1/2) * np.mean((val_pred - y_val)**2) #MSE LOSS
+            val_loss = (1/2) * np.mean((val_pred - y_val)**2)  # HALF MSE LOSS
+            val_pred_class = (val_pred > 0.5).astype(int)
+            val_acc = np.mean(val_pred_class == y_val)
             
             epochs_run.append(epoch + 1)
             train_losses_run.append(train_loss)
             val_losses_run.append(val_loss)
+            train_accs_run.append(train_acc)
+            val_accs_run.append(val_acc)
         
-        all_curves.append((epochs_run, train_losses_run, val_losses_run))
+        all_curves.append((epochs_run, train_losses_run, val_losses_run, train_accs_run, val_accs_run))
     
-    print("\n Re-training completato")
+    print("\nRe-training completato")
     
-    # ========================================
     # SMOOTHING DELLE CURVE
-    # ========================================
     def smooth_curve(values, weight=0.85):
         """Exponential moving average"""
         smoothed = []
@@ -327,74 +336,143 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
             last = smoothed_val
         return smoothed
     
-    # PLOT
-    fig, ax = plt.subplots(figsize=(11, 7))
-    
     # CALCOLA MEDIE PER EPOCA
     max_len = max(len(curve[0]) for curve in all_curves) if all_curves else 100
     
-    train_means = []
-    test_means = []
+    train_loss_means = []
+    val_loss_means = []
+    train_acc_means = []
+    val_acc_means = []
     
     for epoch_idx in range(max_len):
-        train_vals = []
-        test_vals = []
+        train_loss_vals = []
+        val_loss_vals = []
+        train_acc_vals = []
+        val_acc_vals = []
         
-        for epochs_run, train_losses_run, val_losses_run in all_curves:
+        for epochs_run, train_losses_run, val_losses_run, train_accs_run, val_accs_run in all_curves: 
             if epoch_idx < len(train_losses_run):
-                train_vals.append(train_losses_run[epoch_idx])
-                test_vals.append(val_losses_run[epoch_idx])
+                train_loss_vals.append(train_losses_run[epoch_idx])
+                val_loss_vals.append(val_losses_run[epoch_idx])
+                train_acc_vals.append(train_accs_run[epoch_idx])
+                val_acc_vals.append(val_accs_run[epoch_idx])
         
-        if train_vals:
-            train_means.append(np.mean(train_vals))
-            test_means.append(np.mean(test_vals))
+        if train_loss_vals:
+            train_loss_means.append(np.mean(train_loss_vals))
+            val_loss_means.append(np.mean(val_loss_vals))
+            train_acc_means.append(np.mean(train_acc_vals))
+            val_acc_means.append(np.mean(val_acc_vals))
     
-    epochs_axis = range(1, len(train_means) + 1)
-
+    epochs_axis = range(1, len(train_loss_means) + 1)
     
-    # SMOOTH DELLE MEDIE
-    if train_means:
-        train_means_smooth = smooth_curve(train_means, weight=0.98)
-        val_means_smooth = smooth_curve(test_means, weight=0.98)
-        
-        # linee
-        ax.plot(epochs_axis, train_means_smooth, label='Training Loss', color='#1F618D', linewidth=2, alpha=0.8, zorder=10)
-        ax.plot(epochs_axis, val_means_smooth, label='Validation Loss', color='#E74C3C', linewidth=2, alpha=0.8, zorder=10)
-
-        # ANNOTAZIONI
-        y_max = max(max(train_means_smooth), max(val_means_smooth))
-        y_min = min(min(train_means_smooth), min(val_means_smooth))
-        y_range = y_max - y_min if y_max > y_min else 1.0
-        
-        # Optimal complexity (minimo test error)
-        min_val_idx = np.argmin(val_means_smooth)
-        optimal_epoch = min_val_idx + 1
-        optimal_error = val_means_smooth[min_val_idx]
-        
-        ax.axvline(x=optimal_epoch, color='green', linestyle=':', 
-                  linewidth=2.5, alpha=0.7, zorder=9,
-                  label=f'Optimal:  {optimal_epoch} epochs')
-        
-        ax.scatter([optimal_epoch], [optimal_error], color='green', 
-                  s=200, marker='*', zorder=11, edgecolors='black', linewidths=2)
+    # CREAZIONE FIGURE CON 2 SUBPLOT
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
     
-   
-    # FORMATTING
-    ax.set_xlabel('Epochs', fontsize=13, fontweight='bold')
-    ax.set_ylabel('MSE Loss', fontsize=13, fontweight='bold')
-    ax.set_title(f'Training loss and Validation loss vs Training Epochs - {dataset_name}\n', 
-                fontsize=14, fontweight='bold', pad=15)
-    ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    # SUBPLOT 1: LOSS (HALF MSE)
+    if train_loss_means: 
+        train_loss_smooth = smooth_curve(train_loss_means, weight=0.98)
+        val_loss_smooth = smooth_curve(val_loss_means, weight=0.98)
+        
+        # Linee loss
+        ax1.plot(epochs_axis, train_loss_smooth, label='Training Loss (Half MSE)', 
+                color='#1F618D', linewidth=2.5, alpha=0.9, zorder=10)
+        ax1.plot(epochs_axis, val_loss_smooth, label='Validation Loss (Half MSE)', 
+                color='#E74C3C', linewidth=2.5, alpha=0.9, zorder=10)
+        
+        # Optimal complexity (minimo validation loss)
+        min_val_loss_idx = np.argmin(val_loss_smooth)
+        optimal_epoch_loss = min_val_loss_idx + 1
+        optimal_loss = val_loss_smooth[min_val_loss_idx]
+        
+        ax1.axvline(x=optimal_epoch_loss, color='green', linestyle=':', 
+                   linewidth=2.5, alpha=0.7, zorder=9,
+                   label=f'Optimal: {optimal_epoch_loss} epochs')
+        
+        ax1.scatter([optimal_epoch_loss], [optimal_loss], color='green', 
+                   s=250, marker='*', zorder=11, edgecolors='black', linewidths=2)
+        
+        # Annotazione
+        y_max_loss = max(max(train_loss_smooth), max(val_loss_smooth))
+        y_min_loss = min(min(train_loss_smooth), min(val_loss_smooth))
+        y_range_loss = y_max_loss - y_min_loss if y_max_loss > y_min_loss else 1.0
+        
+        ax1.set_ylim(max(0, y_min_loss - 0.05 * y_range_loss), y_max_loss + 0.15 * y_range_loss)
     
-    if train_means:
-        ax.set_ylim(max(0, y_min - 0.05 * y_range), y_max + 0.15 * y_range)
-    ax.set_xlim(0, max_len * 1.02)
+    ax1.set_xlabel('Epochs', fontsize=13, fontweight='bold')
+    ax1.set_ylabel('Half MSE Loss', fontsize=13, fontweight='bold')
+    ax1.set_title(f'Training & Validation Loss vs Epochs\n{dataset_name}', 
+                 fontsize=14, fontweight='bold', pad=15)
+    ax1.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+    ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax1.set_xlim(0, max_len * 1.02)
+    
+    
+    # SUBPLOT 2: ACCURACY
+    if train_acc_means:
+        train_acc_smooth = smooth_curve(train_acc_means, weight=0.98)
+        val_acc_smooth = smooth_curve(val_acc_means, weight=0.98)
+        
+        # Linee accuracy
+        ax2.plot(epochs_axis, train_acc_smooth, label='Training Accuracy', 
+                color='#2874A6', linewidth=2.5, alpha=0.9, zorder=10)
+        ax2.plot(epochs_axis, val_acc_smooth, label='Validation Accuracy', 
+                color='#D35400', linewidth=2.5, alpha=0.9, zorder=10)
+        
+        # Optimal complexity (massima validation accuracy)
+        max_val_acc_idx = np.argmax(val_acc_smooth)
+        optimal_epoch_acc = max_val_acc_idx + 1
+        optimal_acc = val_acc_smooth[max_val_acc_idx]
+        
+        ax2.axvline(x=optimal_epoch_acc, color='green', linestyle=':', 
+                   linewidth=2.5, alpha=0.7, zorder=9,
+                   label=f'Optimal:  {optimal_epoch_acc} epochs')
+        
+        ax2.scatter([optimal_epoch_acc], [optimal_acc], color='green', 
+                   s=250, marker='*', zorder=11, edgecolors='black', linewidths=2)
+        
+        # Linea 100% target
+        ax2.axhline(y=1.0, color='#27AE60', linestyle='--', linewidth=2, 
+                   alpha=0.6, label='100% Target', zorder=8)
+        
+        # Range accuracy
+        y_max_acc = min(1.05, max(max(train_acc_smooth), max(val_acc_smooth)) + 0.05)
+        y_min_acc = max(0, min(min(train_acc_smooth), min(val_acc_smooth)) - 0.05)
+        
+        ax2.set_ylim(y_min_acc, y_max_acc)
+    
+    ax2.set_xlabel('Epochs', fontsize=13, fontweight='bold')
+    ax2.set_ylabel('Accuracy', fontsize=13, fontweight='bold')
+    ax2.set_title(f'Training & Validation Accuracy vs Epochs\n{dataset_name}', 
+                 fontsize=14, fontweight='bold', pad=15)
+    ax2.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+    ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax2.set_xlim(0, max_len * 1.02)
+    
+    # Formattazione asse y come percentuale
+    from matplotlib.ticker import PercentFormatter
+    ax2.yaxis.set_major_formatter(PercentFormatter(1.0))
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     print(f"\n Grafico salvato in: {save_path}")
     plt.show()
+    
+     # Stampa statistiche finali
+    if train_loss_means and train_acc_means:
+        print(f"\n{'─'*70}")
+        print(f" STATISTICHE FINALI (media su {num_runs} runs):")
+        print(f"{'─'*70}")
+        print(f"  Optimal Epoch (Loss):      {optimal_epoch_loss}")
+        print(f"  Min Validation Loss:       {optimal_loss:.6f}")
+        print(f"  Optimal Epoch (Accuracy):  {optimal_epoch_acc}")
+        print(f"  Max Validation Accuracy:   {optimal_acc:.4%}")
+        print(f"  Final Training Accuracy:   {train_acc_smooth[-1]:.4%}")
+        print(f"  Final Validation Accuracy: {val_acc_smooth[-1]:.4%}")
+        print(f"\n{'─'*70}")
+        print(f" HALF MSE LOSS FINALE:")
+        print(f"{'─'*70}")
+        print(f"  Training Set Half MSE:     {train_loss_smooth[-1]:.6f}")
+        print(f"  Validation Set Half MSE:   {val_loss_smooth[-1]:.6f}")
 
 
 if __name__ == "__main__":  
@@ -438,7 +516,7 @@ if __name__ == "__main__":
         
         print(f"\nTop 3 configurazioni selezionate:")
         for idx, res in enumerate(top_3_results, 1):
-            print(f"  {idx}. LR={res['lr']}, Seed={res['seed']}, Val Acc={res['val_accuracy']:.2%}")
+            print(f"  {idx}.LR={res['lr']}, Seed={res['seed']}, Val Acc={res['val_accuracy']:.2%}")
         print(f"\n Training ensemble models...")
         ensemble_nets = []
         ensemble_configs = []
@@ -456,15 +534,14 @@ if __name__ == "__main__":
         
         print(f"\n Ensemble training completato")
         
-        # ========================================
         # PREDIZIONE ENSEMBLE
-        # ========================================
+      
         print(f"\n Valutazione Ensemble sul Test Set...")
         
         ensemble_preds = []
         for net in ensemble_nets:
             pred = net.predict(X_test)
-            ensemble_preds. append(pred)
+            ensemble_preds.append(pred)
         
         # Media delle predizioni
         ensemble_pred_avg = np.mean(ensemble_preds, axis=0)
@@ -529,7 +606,7 @@ if __name__ == "__main__":
             ensemble_train_results['seed'] = "Mixed"
             
             plot_results(ensemble_train_results, ensemble_results, 
-                        save_path='monk1_performance_ENSEMBLE. png')
+                        save_path='monk1_performance_ENSEMBLE.png')
             
             print(f"\n Grafico ensemble salvato: monk1_performance_ENSEMBLE.png")
         
@@ -558,6 +635,13 @@ if __name__ == "__main__":
         print(f"  Test Accuracy (FINAL):  {test_results['test_accuracy']:.4%}")
         
         print(f"\n{'─'*70}")
+        print(" HALF MSE LOSS SU TUTTI I SET:")
+        print(f"{'─'*70}")
+        print(f"  Train Half MSE:          {best_results['train_loss']:.6f}")
+        print(f"  Validation Half MSE:     {best_results['val_loss']:.6f}")
+        print(f"  Test Half MSE (FINAL):   {test_results['test_half_mse']:.6f}")
+        
+        print(f"\n{'─'*70}")
         print(" PARAMETRI MIGLIORI:")
         print(f"{'─'*70}")
         print(f"  Learning Rate:  {best_results['lr']}")
@@ -581,7 +665,7 @@ if __name__ == "__main__":
         print(f"    False Negatives (FN): {cm['fn']}")
         
         print(f"\n File salvati:")
-        print(f"  - monk1_bias_variance_epochs. png (bias-variance vs epoche)")
+        print(f"  - monk1_bias_variance_epochs.png (bias-variance vs epoche)")
         print(f"  - monk1_performance.png (accuracy + confusion matrix)")
         
         print(f"\n{'='*70}")
