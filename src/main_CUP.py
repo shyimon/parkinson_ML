@@ -30,16 +30,16 @@ cup_train_X = data.normalize(cup_train_X, target_min, target_max, train_min, tra
 cup_train_y = data.normalize(cup_train_y, target_min, target_max, y_min_original, y_max_original)
 # np.savetxt("cuptest.csv", cup_test_X, delimiter=",", fmt='%.4f')
 
-network_structure = [cup_test_X.shape[1]]
-network_structure.append(8)
-network_structure.append(6)
-network_structure.append(cup_test_y.shape[1])
-eta = 0.5
+network_structure = [12]
+network_structure.append(60)
+network_structure.append(40)
+network_structure.append(4)
+eta = 0.005
 
 print("Creating neural network with huber loss...")
-net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="huber", l2_lambda=1e-8, algorithm="sgd", activation_type=activation_type, eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.90, weight_initialzer="xavier", momentum=0.2)
+net = nn.NeuralNetwork(network_structure, eta=eta, loss_type="mse", l2_lambda=0.0005, algorithm="sgd", activation_type=activation_type, eta_plus=1.2, eta_minus=0.5, mu=1.75, decay=0.98, weight_initialzer="xavier", momentum=0.9)
 print("Start training...")
-net.fit(cup_train_X, cup_train_y, cup_val_X, cup_val_y, epochs=100, batch_size=8, patience=50)
+net.fit(cup_train_X, cup_train_y, cup_val_X, cup_val_y, epochs=1500, batch_size=16, patience=150)
 
 print("\n" + "="*60)
 print("Valutazione finale (scala originale):")
