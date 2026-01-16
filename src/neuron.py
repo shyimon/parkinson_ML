@@ -199,8 +199,11 @@ class Neuron:
             inputs_array = self.inputs
     
         weight_update = self.delta * inputs_array - l2_lambda * self.weights
-        self.weights += eta * weight_update
-        self.bias += eta * self.delta
+        self.weights -= eta * weight_update
+        self.bias -= eta * self.delta
+
+        if l2_lambda > 0.0:
+            self.weights -= eta * l2_lambda * self.weights
 
     def set_best_weights(self):
         self.best_weights = self.weights

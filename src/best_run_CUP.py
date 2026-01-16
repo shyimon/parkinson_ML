@@ -31,11 +31,11 @@ def train_best_config():
     Training con la migliore configurazione trovata nella grid search
     """
     #  CONFIGURAZIONE 
-    learning_rate = 0.06
-    l2_lambda = 0.00015
+    learning_rate = 0.005
+    l2_lambda = 0.0005
     momentum = 0.9
     network_structure = [12, 60, 40, 4]
-    seed = 42
+    seed = 345
     
     epochs = 1500
     batch_size = 32
