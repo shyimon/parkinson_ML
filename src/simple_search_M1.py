@@ -170,6 +170,7 @@ def evaluate_on_test_set(net, X_test, y_test):
     print(f"\n RISULTATI TEST SET:")
     print(f"  Test Accuracy:  {test_acc:.4%}")
     print(f"  Test Error:     {test_error:.4%}")
+    print(f"  Test Half MSE:  {test_half_mse:.6f}")
     print(f"  Precision:      {precision:.4f}")
     print(f"  Recall:         {recall:.4f}")
     print(f"  F1-score:       {f1:.4f}")
@@ -180,6 +181,7 @@ def evaluate_on_test_set(net, X_test, y_test):
     return {
         'test_accuracy': test_acc,
         'test_error': test_error,
+        'test_half_mse': test_half_mse,
         'precision': precision,
         'recall': recall,
         'f1':  f1,
@@ -257,7 +259,7 @@ def plot_results(train_results, test_results, save_path='monk1_performance.png')
     plt.show()
 
 
-def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='monk1_bias_variance_epochs.png'):
+def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_epochs.png'):
     """
     Crea grafici per: 
     1. Loss (Half MSE) vs Epoche per Training e Validation
@@ -269,14 +271,23 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-1', save_path='mon
     print(f"CREAZIONE GRAFICI LOSS E ACCURACY VS EPOCHE")
     print(f"{'='*70}")
     
+    high_perf_results = [r for r in all_results if r['val_accuracy'] >= 0.95]
+
+    if len(high_perf_results) < 5:
+        print(f"  Solo {len(high_perf_results)} modelli con val_acc >= 95%.  Uso tutti i risultati.")
+        results_to_use = all_results
+    else:
+        print(f" Usando {len(high_perf_results)} modelli con val_acc >= 95%")
+        results_to_use = high_perf_results
+
     # RE-TRAINING DI ALCUNI MODELLI CON TRACKING
     print("Re-training di modelli selezionati con epoch tracking...")
     
     all_curves = []
-    num_runs = min(15, len(all_results))  # Limita a 15 run
+    num_runs = min(15, len(results_to_use))  # Limita a 15 run
     
     for idx in range(num_runs):
-        result = all_results[idx]
+        result = results_to_use[idx]
         print(f"\rProcessing run {idx+1}/{num_runs}.. .", end="")
         
         X_train, y_train, X_val, y_val, X_test, y_test = result['data']
@@ -488,11 +499,11 @@ if __name__ == "__main__":
             learning_rates=[0.005, 0.1, 0.15, 0.2, 0.25]
         )
         
-        # FASE 2: Bias-Variance Tradeoff con EPOCHE
-        print(f"\n FASE 2: Grafico Bias-Variance vs Epoche")
-        plot_bias_variance_epochs(all_results, 
+        # FASE 2: LOSS VS EPOCHS
+        print(f"\n FASE 2: Grafico Loss vs Epochs")
+        plot_loss_epochs(all_results, 
                                   dataset_name='MONK-1',
-                                  save_path='monk1_bias_variance_epochs.png')
+                                  save_path='monk1_loss_epochs.png')
         
         # FASE 3: Valuta sul TEST SET (UNA SOLA VOLTA!)
         print(f"\n FASE 3: Valutazione finale sul Test Set")
@@ -504,117 +515,16 @@ if __name__ == "__main__":
         print(f"\n FASE 4: Grafico Model Performance")
         plot_results(best_results, test_results, save_path='monk1_performance.png')
         
-        # FASE 5: ENSEMBLE 
-        print(f"\n{'='*70}")
-        print(" FASE 5: ENSEMBLE DI MODELLI")
-        print(f"{'='*70}")
+        # FASE 5: Valuta sul TEST SET (UNA SOLA VOLTA!)
+        print(f"\n FASE 3: Valutazione finale sul Test Set")
+        X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
+        final_net = best_results['network']
+        test_results = evaluate_on_test_set(final_net, X_test, y_test)
         
-        # Scegli i 3 migliori seed dalla grid search
-        # Ordina per validation accuracy
-        sorted_results = sorted(all_results, key=lambda x: x['val_accuracy'], reverse=True)
-        top_3_results = sorted_results[:3]
+        # FASE 4: Plot Model Performance + Confusion Matrix
+        print(f"\n FASE 4: Grafico Model Performance")
+        plot_results(best_results, test_results, save_path='monk1_performance.png')
         
-        print(f"\nTop 3 configurazioni selezionate:")
-        for idx, res in enumerate(top_3_results, 1):
-            print(f"  {idx}.LR={res['lr']}, Seed={res['seed']}, Val Acc={res['val_accuracy']:.2%}")
-        print(f"\n Training ensemble models...")
-        ensemble_nets = []
-        ensemble_configs = []
-        
-        for idx, result in enumerate(top_3_results, 1):
-            print(f"\r  Training model {idx}/3.. .", end="", flush=True)
-            
-            # Ri-addestra con lo stesso seed e LR
-            np.random.seed(result['seed'])
-            X_train, y_train, X_val, y_val, X_test, y_test = result['data']
-            
-            # Usa la rete già addestrata (più veloce)
-            ensemble_nets.append(result['network'])
-            ensemble_configs.append({'lr': result['lr'], 'seed': result['seed']})
-        
-        print(f"\n Ensemble training completato")
-        
-        # PREDIZIONE ENSEMBLE
-      
-        print(f"\n Valutazione Ensemble sul Test Set...")
-        
-        ensemble_preds = []
-        for net in ensemble_nets:
-            pred = net.predict(X_test)
-            ensemble_preds.append(pred)
-        
-        # Media delle predizioni
-        ensemble_pred_avg = np.mean(ensemble_preds, axis=0)
-        ensemble_pred_class = (ensemble_pred_avg > 0.5).astype(int)
-        
-        # Calcola accuracy
-        ensemble_acc = np.mean(ensemble_pred_class == y_test)
-        ensemble_error = 1 - ensemble_acc
-        
-        # Confusion matrix ensemble
-        tp_ens = np.sum((ensemble_pred_class == 1) & (y_test == 1))
-        fp_ens = np.sum((ensemble_pred_class == 1) & (y_test == 0))
-        tn_ens = np.sum((ensemble_pred_class == 0) & (y_test == 0))
-        fn_ens = np.sum((ensemble_pred_class == 0) & (y_test == 1))
-        
-        precision_ens = tp_ens / (tp_ens + fp_ens) if (tp_ens + fp_ens) > 0 else 0
-        recall_ens = tp_ens / (tp_ens + fn_ens) if (tp_ens + fn_ens) > 0 else 0
-        f1_ens = 2 * (precision_ens * recall_ens) / (precision_ens + recall_ens) if (precision_ens + recall_ens) > 0 else 0
-        
-        print(f"\n{'='*70}")
-        print(" RISULTATI ENSEMBLE")
-        print(f"{'='*70}")
-        print(f"  Ensemble Accuracy:   {ensemble_acc:.4%}")
-        print(f"  Ensemble Error:     {ensemble_error:.4%}")
-        print(f"  Precision:           {precision_ens:.4f}")
-        print(f"  Recall:             {recall_ens:.4f}")
-        print(f"  F1-score:           {f1_ens:.4f}")
-        print(f"\n  Confusion Matrix (Ensemble):")
-        print(f"    TP:  {tp_ens}  FP: {fp_ens}")
-        print(f"    FN: {fn_ens}  TN: {tn_ens}")
-        
-        # Confronto con singolo modello
-        print(f"\n{'─'*70}")
-        print(" CONFRONTO:  Singolo Modello vs Ensemble")
-        print(f"{'─'*70}")
-        print(f"  Singolo (best): {test_results['test_accuracy']:.4%}")
-        print(f"  Ensemble:       {ensemble_acc:.4%}")
-        
-        improvement = (ensemble_acc - test_results['test_accuracy']) * 100
-        if improvement > 0:
-            print(f"  Miglioramento:   +{improvement:.2f}%")
-        else:
-            print(f"  Differenza:     {improvement:.2f}%")
-        
-        # SALVA RISULTATO ENSEMBLE
-        if ensemble_acc >= test_results['test_accuracy']: 
-            print(f"\n L'ensemble ha performato meglio o uguale al singolo modello!")
-            
-            # Crea un risultato "fittizio" per plot_results
-            ensemble_results = {
-                'test_accuracy': ensemble_acc,
-                'test_error': ensemble_error,
-                'precision': precision_ens,
-                'recall': recall_ens,
-                'f1': f1_ens,
-                'confusion_matrix': {'tp': tp_ens, 'fp': fp_ens, 'tn': tn_ens, 'fn': fn_ens}
-            }
-            
-            # Crea pseudo train_results per il plot
-            ensemble_train_results = best_results.copy()
-            ensemble_train_results['lr'] = f"Ensemble-{len(ensemble_nets)}"
-            ensemble_train_results['seed'] = "Mixed"
-            
-            plot_results(ensemble_train_results, ensemble_results, 
-                        save_path='monk1_performance_ENSEMBLE.png')
-            
-            print(f"\n Grafico ensemble salvato: monk1_performance_ENSEMBLE.png")
-        
-        if ensemble_acc >= 1.0:
-            print(f"\n{''*25}")
-            print(f" 100% TEST ACCURACY RAGGIUNTO CON ENSEMBLE!  🏆🏆🏆")
-            print(f"{''*25}\n")
-
         # RIEPILOGO FINALE
         print(f"\n{'='*70}")
         print(" RIEPILOGO FINALE")
@@ -623,7 +533,7 @@ if __name__ == "__main__":
         if test_results['test_accuracy'] >= 1.0:
             print(" PERFETTO:  100% TEST ACCURACY RAGGIUNTO!")
         elif test_results['test_accuracy'] >= 0.99:
-            print(" ECCELLENTE: 99%+ test accuracy!")
+            print("  ECCELLENTE: 99%+ test accuracy!")
         else:
             print(f" Test Accuracy: {test_results['test_accuracy']:.2%}")
         
@@ -631,8 +541,8 @@ if __name__ == "__main__":
         print(" ACCURACY SU TUTTI I SET:")
         print(f"{'─'*70}")
         print(f"  Train Accuracy:          {best_results['train_accuracy']:.4%}")
-        print(f"  Validation Accuracy:    {best_results['val_accuracy']:.4%}")
-        print(f"  Test Accuracy (FINAL):  {test_results['test_accuracy']:.4%}")
+        print(f"  Validation Accuracy:     {best_results['val_accuracy']:.4%}")
+        print(f"  Test Accuracy (FINAL):   {test_results['test_accuracy']:.4%}")
         
         print(f"\n{'─'*70}")
         print(" HALF MSE LOSS SU TUTTI I SET:")
@@ -644,18 +554,19 @@ if __name__ == "__main__":
         print(f"\n{'─'*70}")
         print(" PARAMETRI MIGLIORI:")
         print(f"{'─'*70}")
-        print(f"  Learning Rate:  {best_results['lr']}")
-        print(f"  Random Seed:    {best_results['seed']}")
-        print(f"  Hidden Units:   {best_results['params']['network_structure'][1]}")
-        print(f"  Momentum:       {best_results['params']['momentum']}")
-        print(f"  Architecture:   {best_results['params']['network_structure']}")
+        print(f"  Learning Rate:   {best_results['lr']}")
+        print(f"  Random Seed:     {best_results['seed']}")
+        print(f"  Hidden Units:    {best_results['params']['network_structure'][1]}")
+        print(f"  Momentum:        {best_results['params']['momentum']}")
+        print(f"  Architecture:    {best_results['params']['network_structure']}")
         
         print(f"\n{'─'*70}")
         print(" METRICHE DETTAGLIATE (TEST SET):")
         print(f"{'─'*70}")
-        print(f"  Precision:  {test_results['precision']:.4f}")
-        print(f"  Recall:     {test_results['recall']:.4f}")
-        print(f"  F1-score:   {test_results['f1']:.4f}")
+        print(f"  Accuracy:    {test_results['test_accuracy']:.4%}")
+        print(f"  Precision:   {test_results['precision']:.4f}")
+        print(f"  Recall:      {test_results['recall']:.4f}")
+        print(f"  F1-score:    {test_results['f1']:.4f}")
         
         cm = test_results['confusion_matrix']
         print(f"\n  Confusion Matrix:")
@@ -665,14 +576,14 @@ if __name__ == "__main__":
         print(f"    False Negatives (FN): {cm['fn']}")
         
         print(f"\n File salvati:")
-        print(f"  - monk1_bias_variance_epochs.png (bias-variance vs epoche)")
-        print(f"  - monk1_performance.png (accuracy + confusion matrix)")
+        print(f"  - monk1_loss_epochs.png (loss e accuracy vs epochs)")
+        print(f"  - monk1_performance.png (confusion matrix)")
         
         print(f"\n{'='*70}")
         print(" ESPERIMENTO MONK-1 COMPLETATO CON SUCCESSO!")
         print(f"{'='*70}\n")
         
-    except Exception as e:
+    except Exception as e: 
         print(f"\n ERRORE:  {e}")
         import traceback
-        traceback.print_exc() 
+        traceback.print_exc()

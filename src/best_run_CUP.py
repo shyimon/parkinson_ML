@@ -96,7 +96,7 @@ def train_best_config():
         'momentum': momentum,
         'algorithm': 'sgd',
         'activation_type': 'tanh',
-        'loss_type': 'half_mse',
+        'loss_type': 'mse',
         'weight_initializer': 'xavier',
         'decay': 0.98,
         'mu': 1.75,

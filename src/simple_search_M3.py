@@ -85,7 +85,7 @@ def grid_search_lr(n_seeds_per_lr=20, learning_rates=None, l2_lambda=None):
     if learning_rates is None:  
         learning_rates = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]  
     if l2_lambda is None:
-        l2_lambda = [0.005, 0.01, 0.02, 0.03, 0.04]
+        l2_lambda = [0.0003] #[0.0005, 0.01, 0.02, 0.03, 0.04]
     
     best_val_acc = 0
     best_results = None
@@ -156,6 +156,7 @@ def evaluate_on_test_set(net, X_test, y_test):
     test_pred_class = (test_pred > 0.5).astype(int)
     test_acc = np.mean(test_pred_class == y_test)
     test_error = 1 - test_acc
+    test_half_mse = 0.5 * np.mean((test_pred - y_test)**2)
     
     # Confusion matrix
     tp = np.sum((test_pred_class == 1) & (y_test == 1))
@@ -170,6 +171,7 @@ def evaluate_on_test_set(net, X_test, y_test):
     print(f"\n RISULTATI TEST SET:")
     print(f"  Test Accuracy:  {test_acc:.4%}")
     print(f"  Test Error:     {test_error:.4%}")
+    print(f"  Test Half MSE:  {test_half_mse:.6f}")
     print(f"  Precision:      {precision:.4f}")
     print(f"  Recall:          {recall:.4f}")
     print(f"  F1-score:       {f1:.4f}")
@@ -180,6 +182,7 @@ def evaluate_on_test_set(net, X_test, y_test):
     return {
         'test_accuracy': test_acc,
         'test_error': test_error,
+        'test_half_mse': test_half_mse,
         'precision': precision,
         'recall': recall,
         'f1': f1,
@@ -478,214 +481,77 @@ if __name__ == "__main__":
         plot_results(best_results, test_results, save_path='monk3_performance_single.png')
 
         
-        print(f"\n{'='*70}")
-        print("  FASE 5: ENSEMBLE (TOP 15 + WEIGHTED + THRESHOLD TUNING)")
-        print(f"{'='*70}")
+        # FASE 5: Test Set Evaluation (singolo modello)
+        print(f"\n FASE 3: Valutazione singolo modello sul Test Set")
+        X_train, y_train, X_val, y_val, X_test, y_test = best_results['data']
+        final_net = best_results['network']
+        test_results = evaluate_on_test_set(final_net, X_test, y_test)
         
-        # Seleziona top 15 modelli
-        sorted_results = sorted(all_results, key=lambda x: x['val_accuracy'], reverse=True)
-        top_15_results = sorted_results[: 15]
+        # FASE 4: Plot Performance (singolo)
+        print(f"\n FASE 4: Grafico Model Performance (singolo)")
+        plot_results(best_results, test_results, save_path='monk3_performance.png')
         
-        print(f"\n Top 15 configurazioni selezionate:")
-        for idx, res in enumerate(top_15_results, 1):
-            print(f"  {idx: 2d}.LR={res['lr']:.2f}, Seed={res['seed']: 4d}, Val Acc={res['val_accuracy']:.2%}")
-        
-        # ENSEMBLE PESATO basato su validation accuracy
-        weights = np.array([res['val_accuracy'] for res in top_15_results])
-        weights = weights / np.sum(weights)  # Normalizza
-        
-        print(f"\n  Pesi ensemble (top 5 più pesanti):")
-        for idx in range(min(5, len(weights))):
-            res = top_15_results[idx]
-            print(f"  {idx+1}.LR={res['lr']:.2f}, Seed={res['seed']:4d}, Weight={weights[idx]:.4f}")
-        
-        # Predizioni ensemble SUL VALIDATION (per threshold tuning)
-        print(f"\n Threshold tuning sul validation set...")
-        ensemble_nets = [res['network'] for res in top_15_results]
-        
-        ensemble_preds_val = [net.predict(X_val) for net in ensemble_nets]
-        ensemble_avg_val = np.average(ensemble_preds_val, axis=0, weights=weights)
-        
-        # TROVA THRESHOLD OTTIMALE
-        best_f1 = 0
-        best_threshold = 0.5
-        best_metrics = {}
-        
-        for threshold in np.arange(0.35, 0.65, 0.005):
-            pred_class = (ensemble_avg_val > threshold).astype(int)
-            
-            tp = np.sum((pred_class == 1) & (y_val == 1))
-            fp = np.sum((pred_class == 1) & (y_val == 0))
-            tn = np.sum((pred_class == 0) & (y_val == 0))
-            fn = np.sum((pred_class == 0) & (y_val == 1))
-            
-            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-            recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
-            accuracy = (tp + tn) / len(y_val)
-            
-            if f1 > best_f1:
-                best_f1 = f1
-                best_threshold = threshold
-                best_metrics = {
-                    'threshold': threshold,
-                    'f1':  f1,
-                    'precision': precision,
-                    'recall': recall,
-                    'accuracy': accuracy
-                }
-        
-        print(f"\n Threshold ottimale:  {best_threshold:.3f}")
-        print(f"   Val F1:        {best_metrics['f1']:.4f}")
-        print(f"   Val Precision: {best_metrics['precision']:.4f}")
-        print(f"   Val Recall:    {best_metrics['recall']:.4f}")
-        print(f"   Val Accuracy:  {best_metrics['accuracy']:.4f}")
-        
-        # ENSEMBLE PREDICTION SUL TEST SET
-        print(f"\n Applicazione ensemble sul Test Set...")
-        
-        ensemble_preds_test = [net.predict(X_test) for net in ensemble_nets]
-        ensemble_avg_test = np.average(ensemble_preds_test, axis=0, weights=weights)
-        
-        # Applica threshold ottimale
-        ensemble_class = (ensemble_avg_test > best_threshold).astype(int)
-        ensemble_acc = np.mean(ensemble_class == y_test)
-        
-        # Confusion matrix ensemble
-        tp_ens = np.sum((ensemble_class == 1) & (y_test == 1))
-        fp_ens = np.sum((ensemble_class == 1) & (y_test == 0))
-        tn_ens = np.sum((ensemble_class == 0) & (y_test == 0))
-        fn_ens = np.sum((ensemble_class == 0) & (y_test == 1))
-        
-        precision_ens = tp_ens / (tp_ens + fp_ens) if (tp_ens + fp_ens) > 0 else 0
-        recall_ens = tp_ens / (tp_ens + fn_ens) if (tp_ens + fn_ens) > 0 else 0
-        f1_ens = 2 * (precision_ens * recall_ens) / (precision_ens + recall_ens) if (precision_ens + recall_ens) > 0 else 0
-        
-        print(f"\n{'='*70}")
-        print(" RISULTATI ENSEMBLE (WEIGHTED + THRESHOLD TUNED)")
-        print(f"{'='*70}")
-        print(f"  Ensemble Accuracy:   {ensemble_acc:.4%}")
-        print(f"  Precision:          {precision_ens:.4f}")
-        print(f"  Recall:             {recall_ens:.4f}")
-        print(f"  F1-score:           {f1_ens:.4f}")
-        print(f"  Threshold:          {best_threshold:.3f}")
-        print(f"\n  Confusion Matrix (Ensemble):")
-        print(f"    TP: {tp_ens: 3d}  FP: {fp_ens:3d}")
-        print(f"    FN: {fn_ens: 3d}  TN: {tn_ens:3d}")
-        
-        # Confronto dettagliato
-        print(f"\n{'─'*70}")
-        print(" CONFRONTO:   Singolo vs Ensemble")
-        print(f"{'─'*70}")
-        print(f"  {'Metrica':<20} {'Singolo': >12} {'Ensemble':>12} {'Diff':>10}")
-        print(f"  {'-'*20} {'-'*12} {'-'*12} {'-'*10}")
-        
-        single_acc = test_results['test_accuracy']
-        single_prec = test_results['precision']
-        single_rec = test_results['recall']
-        single_f1 = test_results['f1']
-        
-        print(f"  {'Accuracy':<20} {single_acc: >11.2%} {ensemble_acc:>11.2%} {(ensemble_acc-single_acc)*100:>9.2f}%")
-        print(f"  {'Precision':<20} {single_prec:>12.4f} {precision_ens:>12.4f} {(precision_ens-single_prec):>10.4f}")
-        print(f"  {'Recall':<20} {single_rec:>12.4f} {recall_ens:>12.4f} {(recall_ens-single_rec):>10.4f}")
-        print(f"  {'F1-score':<20} {single_f1:>12.4f} {f1_ens:>12.4f} {(f1_ens-single_f1):>10.4f}")
-        
-        improvement = (ensemble_acc - single_acc) * 100
-        if improvement > 0:
-            print(f"\n   Miglioramento Accuracy: +{improvement:.2f}%")
-        elif improvement == 0:
-            print(f"\n    Ensemble uguale al singolo")
-        else:
-            print(f"\n   Ensemble peggiore:  {improvement:.2f}%")
-        
-        # Plot ensemble se migliore
-        if ensemble_acc >= single_acc:
-            print(f"\n Creazione grafico ensemble...")
-            
-            ensemble_test_results = {
-                'test_accuracy': ensemble_acc,
-                'test_error': 1 - ensemble_acc,
-                'precision': precision_ens,
-                'recall': recall_ens,
-                'f1': f1_ens,
-                'confusion_matrix': {'tp': tp_ens, 'fp': fp_ens, 'tn': tn_ens, 'fn': fn_ens}
-            }
-            
-            ensemble_train_results = best_results.copy()
-            ensemble_train_results['lr'] = f"Ensemble-{len(ensemble_nets)}"
-            ensemble_train_results['seed'] = "Mixed"
-            
-            plot_results(ensemble_train_results, ensemble_test_results, 
-                        save_path='monk3_performance_ENSEMBLE.png')
-        
+        # RIEPILOGO FINALE
         print(f"\n{'='*70}")
         print("  RIEPILOGO FINALE")
         print(f"{'='*70}")
         
-        final_acc = max(single_acc, ensemble_acc)
-        
-        if final_acc >= 0.97:
+        if test_results['test_accuracy'] >= 0.97:
             print("  ECCELLENTE:  97%+ test accuracy (su dataset con 5% noise)!")
-        elif final_acc >= 0.95:
+        elif test_results['test_accuracy'] >= 0.95:
             print("  OTTIMO: 95%+ test accuracy!")
-        elif final_acc >= 0.93:
+        elif test_results['test_accuracy'] >= 0.93:
             print(" ✓ BUONO: 93%+ test accuracy!")
         else:
-            print(f"  Test Accuracy: {final_acc:.2%}")
+            print(f"  Test Accuracy: {test_results['test_accuracy']:.2%}")
         
         print(f"\n{'─'*70}")
         print(" ACCURACY SU TUTTI I SET:")
         print(f"{'─'*70}")
-        print(f"  Train Accuracy (best):      {best_results['train_accuracy']:.4%}")
-        print(f"  Validation Accuracy (best): {best_results['val_accuracy']:.4%}")
-        print(f"  Test Accuracy (singolo):    {single_acc:.4%}")
-        print(f"  Test Accuracy (ensemble):   {ensemble_acc:.4%} {'← BEST!  🏆' if ensemble_acc >= single_acc else ''}")
+        print(f"  Train Accuracy:        {best_results['train_accuracy']:.4%}")
+        print(f"  Validation Accuracy:  {best_results['val_accuracy']:.4%}")
+        print(f"  Test Accuracy:         {test_results['test_accuracy']:.4%}")
         
         print(f"\n{'─'*70}")
-        print(" PARAMETRI MIGLIORI (singolo modello):")
+        print(" LOSS FINALE (HALF MSE):")
         print(f"{'─'*70}")
-        print(f"  Learning Rate:   {best_results['lr']}")
-        print(f"  Seed:           {best_results['seed']}")
-        print(f"  L2 Lambda:      {best_results['params']['l2_lambda']}")
-        print(f"  Momentum:       {best_results['params']['momentum']}")
-        print(f"  Architecture:   {best_results['params']['network_structure']}")
+        print(f"  Train Loss:       {best_results['train_loss']:.6f}")
+        print(f"  Validation Loss:   {best_results['val_loss']:.6f}")
+        print(f"  Test Loss:         {test_results['test_half_mse']:.6f}")  # ← STAMPA TEST LOSS
         
         print(f"\n{'─'*70}")
-        print(" CONFIGURAZIONE ENSEMBLE:")
+        print(" PARAMETRI MIGLIORI:")
         print(f"{'─'*70}")
-        print(f"  Numero modelli:     {len(ensemble_nets)}")
-        print(f"  Metodo averaging:    Weighted (basato su val accuracy)")
-        print(f"  Threshold:           {best_threshold:.3f} (ottimizzato su validation)")
-        print(f"  Learning Rates:     {sorted(set([r['lr'] for r in top_15_results]))}")
+        print(f"  Learning Rate:    {best_results['lr']}")
+        print(f"  Seed:            {best_results['seed']}")
+        print(f"  L2 Lambda:       {best_results['l2_lambda']}")
+        print(f"  Momentum:        {best_results['params']['momentum']}")
+        print(f"  Architecture:    {best_results['params']['network_structure']}")
         
         print(f"\n{'─'*70}")
-        print(" METRICHE DETTAGLIATE (BEST MODEL):")
+        print(" METRICHE DETTAGLIATE (TEST SET):")
         print(f"{'─'*70}")
+        print(f"  Accuracy:    {test_results['test_accuracy']:.4%}")
+        print(f"  Precision:   {test_results['precision']:.4f}")
+        print(f"  Recall:      {test_results['recall']:.4f}")
+        print(f"  F1-score:    {test_results['f1']:.4f}")
         
-        if ensemble_acc >= single_acc:
-            print(f"  [ENSEMBLE - TOP {len(ensemble_nets)} MODELS]")
-            print(f"  Accuracy:    {ensemble_acc:.4%}")
-            print(f"  Precision:  {precision_ens:.4f}")
-            print(f"  Recall:     {recall_ens:.4f}")
-            print(f"  F1-score:   {f1_ens:.4f}")
-        else:
-            print(f"  [SINGOLO MODELLO]")
-            print(f"  Accuracy:   {single_acc:.4%}")
-            print(f"  Precision:  {single_prec:.4f}")
-            print(f"  Recall:     {single_rec:.4f}")
-            print(f"  F1-score:   {single_f1:.4f}")
+        cm = test_results['confusion_matrix']
+        print(f"\n  Confusion Matrix:")
+        print(f"    True Positives  (TP): {cm['tp']}")
+        print(f"    False Positives (FP): {cm['fp']}")
+        print(f"    True Negatives  (TN): {cm['tn']}")
+        print(f"    False Negatives (FN): {cm['fn']}")
         
         print(f"\n File salvati:")
-        print(f"   monk3_bias_variance_epochs.png (bias-variance tradeoff)")
-        print(f"   monk3_performance_single.png (singolo modello)")
-        if ensemble_acc >= single_acc: 
-            print(f"   monk3_performance_ENSEMBLE.png (ensemble) ")
+        print(f"  - monk3_bias_variance_epochs.png (bias-variance tradeoff)")
+        print(f"  - monk3_performance.png (confusion matrix)")
         
         print(f"\n{'='*70}")
         print("  ESPERIMENTO MONK-3 COMPLETATO CON SUCCESSO!")
         print(f"{'='*70}\n")
         
-    except Exception as e:
+    except Exception as e: 
         print(f"\n ERRORE:  {e}")
         import traceback
         traceback.print_exc()
