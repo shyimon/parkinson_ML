@@ -10,7 +10,7 @@ from graphviz import Digraph
 # A method to render and save a graphical representation of the nerwork passed using the graphviz library
 def draw_network(layers, path="img/network"):
     dot = Digraph(format="png")
-    dot.attr(rankdir='LR', splines='line', ranksep='3')
+    dot.attr(rankdir='LR', splines='line', ranksep='10')
 
     for i in range(len(layers)):
         with dot.subgraph(name=f"cluster_{i}") as c:

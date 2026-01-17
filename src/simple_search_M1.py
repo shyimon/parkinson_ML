@@ -309,8 +309,9 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
         batch_size = 1
         
         for epoch in range(max_epochs):
+            print(f"\nRe-training epoch {epoch}.")
             try:
-                net.fit(X_train, y_train, X_val, y_val, epochs=1, batch_size=batch_size, verbose=False)
+                net.fit(X_train, y_train, X_val, y_val, epochs=epoch, batch_size=batch_size, verbose=False)
             except:  
                 break
             
