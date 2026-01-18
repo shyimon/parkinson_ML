@@ -152,7 +152,7 @@ class NeuralNetwork:
             val_loss = np.sum(self.compute_loss(y_val, y_pred_val, loss_type=self.loss_type))
             avg_val_loss = val_loss / len(y_val)
             self.loss_history["validation"].append(avg_val_loss)
-            self._update_lr_on_plateau(avg_val_loss, patience_lr=patience // 2)
+            self._update_lr_on_plateau(avg_val_loss, patience_lr=patience // 4)
 
             # early stopping su validation
             min_delta = 1e-4  # tuneable, but this is reasonable for normalized CUP
@@ -177,7 +177,7 @@ class NeuralNetwork:
                     )
                 break     
 
-            if epoch % 25 == 0 and verbose:
+            if epoch % 5 == 0 and verbose:
                 print(f"\nEpoch {epoch}, Loss: {train_loss_epoch:.6f}\nValidation Loss: {avg_val_loss:.6f}")
             
         print(f"\nEpoch {epoch}, Loss: {self.loss_history["training"][-1]:.6f}\nValidation Loss: {self.loss_history["validation"][-1]:.6f}")
