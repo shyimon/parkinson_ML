@@ -2,9 +2,29 @@ Name: Alessia Stocco, Cosimo Botticelli, Giulia Tumminello
 Team: PlusUltra
 Dataset: ML-CUP25 
 
+We address the ML-CUP25 regression task by investigating two neural architectures with different learning paradigms:
+A constructive Cascade Correlation Network and a fixed-topology Multi Layer Neural Network.
 
 Model 1: Cascade Correlation Network (Constructive Neural Network)
 Validation: Hold-out validation on merged TR+VAL set (85/15 % split) for early stopping. Model selection performed via Grid Search.
 
 Model 2: Multi Layer NN
 Validation: Hold-out validation on VAL set (100 out of 500 examples) for early stopping. Model selection performed via Grid Search.
+
+Although the final parameters have been decided through extensive Grid Search, we explored different possibilities, and in particular
+we implemented the following learning tools and heuristics:
+- Xavier and Uniform weight initialization
+
+- {Half MSE; MSE; MAE; LogCosH; Huber; Binary Cross Entropy; MEE} Losses
+
+-  SGD Backpropagation, RProp and QuickProp
+
+- Sigmoid and TanH activation functions
+
+- L2 Regularization
+
+- Momentum for gradient descent
+
+- Minibatch
+
+- Learning rate decay based on patience (plateau detection)
