@@ -1,0 +1,10 @@
+Name: Alessia Stocco, Cosimo Botticelli, Giulia Tumminello
+Team: PlusUltra
+Dataset: ML-CUP25 
+
+
+Model 1: Cascade Correlation Network (Constructive Neural Network)
+Validation: Hold-out validation on merged TR+VAL set (85/15 % split) for early stopping. Model selection performed via Grid Search.
+
+Model 2: Multi Layer NN
+Validation: Hold-out validation on VAL set (100 out of 500 examples) for early stopping. Model selection performed via Grid Search.
