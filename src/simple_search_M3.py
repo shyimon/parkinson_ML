@@ -548,7 +548,7 @@ if __name__ == "__main__":
         elif test_results['test_accuracy'] >= 0.95:
             print("  OTTIMO: 95%+ test accuracy!")
         elif test_results['test_accuracy'] >= 0.93:
-            print(" ✓ BUONO: 93%+ test accuracy!")
+            print("  BUONO: 93%+ test accuracy!")
         else:
             print(f"  Test Accuracy: {test_results['test_accuracy']:.2%}")
         
