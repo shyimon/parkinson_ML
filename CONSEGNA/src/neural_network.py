@@ -114,6 +114,7 @@ class NeuralNetwork:
     def fit(self, X_train, y_train, X_val, y_val, epochs=1000, batch_size=1, patience=20, verbose=True):
          # reset history
         self.loss_history = {"training": [], "validation": []}
+        self.accuracy_history = {"training": [], "validation": []}
 
         for epoch in range(epochs):
             # unified batch loop
@@ -146,13 +147,25 @@ class NeuralNetwork:
             # --- training loss    
             train_loss_epoch = epoch_train_loss / len(X_train)
             self.loss_history["training"].append(train_loss_epoch)
+            
+            # --- training accuracy (per classificazione binaria)
+            y_pred_train = self.predict(X_train)
+            train_pred_class = (y_pred_train > 0.5).astype(int)
+            train_acc = np.mean(train_pred_class == y_train)
+            self.accuracy_history["training"].append(train_acc)
 
             # --- validation loss
             y_pred_val = self.predict(X_val)
             val_loss = np.sum(self.compute_loss(y_val, y_pred_val, loss_type=self.loss_type))
             avg_val_loss = val_loss / len(y_val)
             self.loss_history["validation"].append(avg_val_loss)
-            self._update_lr_on_plateau(avg_val_loss, patience_lr=patience // 2)
+            
+            # --- validation accuracy (per classificazione binaria)
+            val_pred_class = (y_pred_val > 0.5).astype(int)
+            val_acc = np.mean(val_pred_class == y_val)
+            self.accuracy_history["validation"].append(val_acc)
+            
+            self._update_lr_on_plateau(avg_val_loss, patience_lr=patience // 4)
 
             # early stopping su validation
             min_delta = 1e-4  # tuneable, but this is reasonable for normalized CUP
@@ -177,7 +190,7 @@ class NeuralNetwork:
                     )
                 break     
 
-            if epoch % 25 == 0 and verbose:
+            if epoch % 5 == 0 and verbose:
                 print(f"\nEpoch {epoch}, Loss: {train_loss_epoch:.6f}\nValidation Loss: {avg_val_loss:.6f}")
             
         print(f"\nEpoch {epoch}, Loss: {self.loss_history["training"][-1]:.6f}\nValidation Loss: {self.loss_history["validation"][-1]:.6f}")

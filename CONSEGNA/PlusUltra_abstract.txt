@@ -28,3 +28,7 @@ we implemented the following learning tools and heuristics:
 - Minibatch
 
 - Learning rate decay based on patience (plateau detection)
+
+###
+
+The results for the blind test are based on the Multi Layer NN Model.
