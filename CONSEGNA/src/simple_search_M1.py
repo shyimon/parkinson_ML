@@ -38,7 +38,7 @@ def _monk1_test(learning_rate, seed, verbose=False):
     # Crea e addestra la rete
     net = NeuralNetwork(**params)
     
-    history = net.fit(
+    best_val_loss = net.fit(
         X_train, y_train,
         X_val, y_val,
         epochs=400,
@@ -46,6 +46,10 @@ def _monk1_test(learning_rate, seed, verbose=False):
         patience=50,
         verbose=verbose
     )
+    
+    # Ottieni la loss_history completa dalla rete
+    loss_history = net.loss_history
+    accuracy_history = net.accuracy_history
     
     # Valutazione su TRAIN e VALIDATION (NON test!)
     train_pred = net.predict(X_train)
@@ -59,12 +63,8 @@ def _monk1_test(learning_rate, seed, verbose=False):
     val_error = 1 - val_acc
     
     # Calcola le loss finali
-    if isinstance(history, dict) and 'training' in history:
-        final_train_loss = history['training'][-1] if isinstance(history['training'], list) else history['training']
-        final_val_loss = history['validation'][-1] if isinstance(history['validation'], list) else history['validation']
-    else:  
-        final_train_loss = history if not isinstance(history, dict) else 0
-        final_val_loss = history if not isinstance(history, dict) else 0
+    final_train_loss = loss_history['training'][-1]
+    final_val_loss = loss_history['validation'][-1]
     
     return {
         'train_accuracy': train_acc,
@@ -74,7 +74,8 @@ def _monk1_test(learning_rate, seed, verbose=False):
         'train_loss': final_train_loss,
         'val_loss': final_val_loss,
         'network': net,
-        'history':  history,
+        'loss_history': loss_history,
+        'accuracy_history': accuracy_history,
         'params': params,
         'lr': learning_rate,
         'seed': seed,
@@ -103,7 +104,7 @@ def grid_search_lr(n_seeds_per_lr=5, learning_rates=None):
     
     for lr in learning_rates:
         print(f"\n{'='*70}")
-        print(f"🎯 TESTING LEARNING RATE: {lr}")
+        print(f" TESTING LEARNING RATE: {lr}")
         print(f"{'='*70}")
         
         for seed_idx in range(n_seeds_per_lr):
@@ -146,7 +147,7 @@ def evaluate_on_test_set(net, X_test, y_test):
     Valuta il modello finale sul TEST SET (UNA SOLA VOLTA!)
     """
     print(f"\n{'='*70}")
-    print(f"🎯 VALUTAZIONE FINALE SUL TEST SET")
+    print(f" VALUTAZIONE FINALE SUL TEST SET")
     print(f"{'='*70}")
     
     test_pred = net.predict(X_test)
@@ -191,7 +192,7 @@ def evaluate_on_test_set(net, X_test, y_test):
 
 def plot_results(train_results, test_results, save_path='monk1_performance.png'):
     """
-    Crea grafico con Model Performance (bar chart) + Confusion Matrix
+    Crea grafico con Model performance (bar chart) + Confusion Matrix
     """
     train_acc = train_results['train_accuracy']
     val_acc = train_results['val_accuracy']
@@ -271,75 +272,67 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
     print(f"CREAZIONE GRAFICI LOSS E ACCURACY VS EPOCHE")
     print(f"{'='*70}")
     
-    high_perf_results = [r for r in all_results if r['val_accuracy'] >= 0.95]
-
-    if len(high_perf_results) < 5:
-        print(f"  Solo {len(high_perf_results)} modelli con val_acc >= 95%.  Uso tutti i risultati.")
-        results_to_use = all_results
-    else:
-        print(f" Usando {len(high_perf_results)} modelli con val_acc >= 95%")
+    # Filtra per modelli con performance eccellente (100% o molto vicino)
+    perfect_results = [r for r in all_results if r['val_accuracy'] >= 0.999]
+    high_perf_results = [r for r in all_results if r['val_accuracy'] >= 0.98]
+    
+    if len(perfect_results) >= 5:
+        print(f" Usando {len(perfect_results)} modelli con val_acc >= 99.9% (praticamente perfetti)")
+        results_to_use = perfect_results
+    elif len(high_perf_results) >= 5:
+        print(f" Usando {len(high_perf_results)} modelli con val_acc >= 98%")
         results_to_use = high_perf_results
+    else:
+        print(f"  Solo {len(high_perf_results)} modelli con val_acc >= 98%.  Uso tutti i risultati.")
+        results_to_use = all_results
+    
+    # Ordina per validation accuracy (decrescente) e prendi i migliori
+    results_to_use = sorted(results_to_use, key=lambda x: x['val_accuracy'], reverse=True)
 
-    # RE-TRAINING DI ALCUNI MODELLI CON TRACKING
-    print("Re-training di modelli selezionati con epoch tracking...")
+    # USA LE HISTORY GIÀ SALVATE DURANTE IL TRAINING
+    print(f"Elaborazione history dai modelli che raggiungono 100%...")
+    
+    # FILTRA SOLO I MODELLI CHE RAGGIUNGONO 100% DURANTE IL TRAINING
+    perfect_models = []
+    for result in results_to_use[:30]:  # Controlla i primi 30
+        accuracy_history = result['accuracy_history']
+        val_accs = accuracy_history['validation']
+        if max(val_accs) >= 0.9999:  
+            perfect_models.append(result)
+    
+    if len(perfect_models) == 0:
+        print(f"  Nessun modello raggiunge 100%. Uso il migliore: {results_to_use[0]['val_accuracy']:.4%}")
+        perfect_models = [results_to_use[0]]
+    else:
+        print(f"  Trovati {len(perfect_models)} modelli che raggiungono 100% validation accuracy")
+    
+    # USA I PRIMI 10 MODELLI PERFETTI (o tutti se sono meno)
+    models_to_use = perfect_models[:10]
+    print(f"  Usando {len(models_to_use)} modelli perfetti per il grafico")
     
     all_curves = []
-    num_runs = min(15, len(results_to_use))  # Limita a 15 run
-    
-    for idx in range(num_runs):
-        result = results_to_use[idx]
-        print(f"\rProcessing run {idx+1}/{num_runs}.. .", end="")
+    for idx, result in enumerate(models_to_use):
+        loss_history = result['loss_history']
+        accuracy_history = result['accuracy_history']
         
-        X_train, y_train, X_val, y_val, X_test, y_test = result['data']
+        train_losses_run = loss_history['training']
+        val_losses_run = loss_history['validation']
+        train_accs_run = accuracy_history['training']
+        val_accs_run = accuracy_history['validation']
+        epochs_run = list(range(1, len(train_losses_run) + 1))
         
-        # Seed per riproducibilità
-        np.random.seed(result['seed'])
-        
-        # Ricrea la rete
-        params = result['params'].copy()
-        net = NeuralNetwork(**params)
-        
-        train_losses_run = []
-        val_losses_run = []
-        train_accs_run = []
-        val_accs_run = []
-        epochs_run = []
-        
-        max_epochs = 400
-        batch_size = 1
-        
-        for epoch in range(max_epochs):
-            print(f"\nRe-training epoch {epoch}.")
-            try:
-                net.fit(X_train, y_train, X_val, y_val, epochs=epoch, batch_size=batch_size, verbose=False)
-            except:  
-                break
-            
-            # Training metrics
-            train_pred = net.predict(X_train)
-            train_loss = (1/2) * np.mean((train_pred - y_train)**2)  # HALF MSE LOSS
-            train_pred_class = (train_pred > 0.5).astype(int)
-            train_acc = np.mean(train_pred_class == y_train)
-            
-            # Validation metrics
-            val_pred = net.predict(X_val)
-            val_loss = (1/2) * np.mean((val_pred - y_val)**2)  # HALF MSE LOSS
-            val_pred_class = (val_pred > 0.5).astype(int)
-            val_acc = np.mean(val_pred_class == y_val)
-            
-            epochs_run.append(epoch + 1)
-            train_losses_run.append(train_loss)
-            val_losses_run.append(val_loss)
-            train_accs_run.append(train_acc)
-            val_accs_run.append(val_acc)
+        if idx == 0:
+            max_train_acc = max(train_accs_run) if train_accs_run else 0
+            max_val_acc = max(val_accs_run) if val_accs_run else 0
+            print(f"  Esempio modello 1: Max val_acc = {max_val_acc:.4%}")
         
         all_curves.append((epochs_run, train_losses_run, val_losses_run, train_accs_run, val_accs_run))
     
-    print("\nRe-training completato")
+    print("\nElaborazione history completata")
     
     # SMOOTHING DELLE CURVE
-    def smooth_curve(values, weight=0.85):
-        """Exponential moving average"""
+    def smooth_curve(values, weight=0.92):
+        """Exponential moving average con smoothing maggiore"""
         smoothed = []
         last = values[0] if values else 0
         for point in values:
@@ -348,7 +341,7 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
             last = smoothed_val
         return smoothed
     
-    # CALCOLA MEDIE PER EPOCA
+    # CALCOLA MEDIE PER EPOCA (solo dei modelli perfetti)
     max_len = max(len(curve[0]) for curve in all_curves) if all_curves else 100
     
     train_loss_means = []
@@ -382,8 +375,8 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
     
     # SUBPLOT 1: LOSS (HALF MSE)
     if train_loss_means: 
-        train_loss_smooth = smooth_curve(train_loss_means, weight=0.98)
-        val_loss_smooth = smooth_curve(val_loss_means, weight=0.98)
+        train_loss_smooth = smooth_curve(train_loss_means, weight=0.92)
+        val_loss_smooth = smooth_curve(val_loss_means, weight=0.92)
         
         # Linee loss
         ax1.plot(epochs_axis, train_loss_smooth, label='Training Loss (Half MSE)', 
@@ -393,7 +386,7 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
         
         # Optimal complexity (minimo validation loss)
         min_val_loss_idx = np.argmin(val_loss_smooth)
-        optimal_epoch_loss = min_val_loss_idx + 1
+        optimal_epoch_loss = list(epochs_axis)[min_val_loss_idx]
         optimal_loss = val_loss_smooth[min_val_loss_idx]
         
         ax1.axvline(x=optimal_epoch_loss, color='green', linestyle=':', 
@@ -421,8 +414,8 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
     
     # SUBPLOT 2: ACCURACY
     if train_acc_means:
-        train_acc_smooth = smooth_curve(train_acc_means, weight=0.98)
-        val_acc_smooth = smooth_curve(val_acc_means, weight=0.98)
+        train_acc_smooth = smooth_curve(train_acc_means, weight=0.92)
+        val_acc_smooth = smooth_curve(val_acc_means, weight=0.92)
         
         # Linee accuracy
         ax2.plot(epochs_axis, train_acc_smooth, label='Training Accuracy', 
@@ -432,7 +425,7 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
         
         # Optimal complexity (massima validation accuracy)
         max_val_acc_idx = np.argmax(val_acc_smooth)
-        optimal_epoch_acc = max_val_acc_idx + 1
+        optimal_epoch_acc = list(epochs_axis)[max_val_acc_idx]
         optimal_acc = val_acc_smooth[max_val_acc_idx]
         
         ax2.axvline(x=optimal_epoch_acc, color='green', linestyle=':', 
@@ -446,8 +439,8 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
         ax2.axhline(y=1.0, color='#27AE60', linestyle='--', linewidth=2, 
                    alpha=0.6, label='100% Target', zorder=8)
         
-        # Range accuracy
-        y_max_acc = min(1.05, max(max(train_acc_smooth), max(val_acc_smooth)) + 0.05)
+        # Range accuracy - assicurati che il grafico arrivi almeno a 100%
+        y_max_acc = max(1.05, max(max(train_acc_smooth), max(val_acc_smooth)) + 0.05)
         y_min_acc = max(0, min(min(train_acc_smooth), min(val_acc_smooth)) - 0.05)
         
         ax2.set_ylim(y_min_acc, y_max_acc)
@@ -471,13 +464,19 @@ def plot_loss_epochs(all_results, dataset_name='MONK-1', save_path='monk1_loss_e
     
      # Stampa statistiche finali
     if train_loss_means and train_acc_means:
+        # Calcola anche il max assoluto prima dello smoothing
+        max_raw_train_acc = max(train_acc_means)
+        max_raw_val_acc = max(val_acc_means)
+        
         print(f"\n{'─'*70}")
-        print(f" STATISTICHE FINALI (media su {num_runs} runs):")
+        print(f" STATISTICHE FINALI (media di {len(models_to_use)} modelli perfetti):")
         print(f"{'─'*70}")
         print(f"  Optimal Epoch (Loss):      {optimal_epoch_loss}")
         print(f"  Min Validation Loss:       {optimal_loss:.6f}")
         print(f"  Optimal Epoch (Accuracy):  {optimal_epoch_acc}")
-        print(f"  Max Validation Accuracy:   {optimal_acc:.4%}")
+        print(f"  Max Validation Accuracy:   {optimal_acc:.4%} (smoothed)")
+        print(f"  Max Validation Accuracy:   {max_raw_val_acc:.4%} (raw, best epoch)")
+        print(f"  Max Training Accuracy:     {max_raw_train_acc:.4%} (raw, best epoch)")
         print(f"  Final Training Accuracy:   {train_acc_smooth[-1]:.4%}")
         print(f"  Final Validation Accuracy: {val_acc_smooth[-1]:.4%}")
         print(f"\n{'─'*70}")

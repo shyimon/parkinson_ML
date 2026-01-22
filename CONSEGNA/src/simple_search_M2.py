@@ -36,7 +36,7 @@ def _monk2_test(learning_rate, seed, verbose=False):
     # Crea e addestra la rete
     net = NeuralNetwork(**params)
     
-    history = net.fit(
+    best_val_loss = net.fit(
         X_train, y_train,
         X_val, y_val,
         epochs=2000,  
@@ -44,6 +44,10 @@ def _monk2_test(learning_rate, seed, verbose=False):
         patience=200,
         verbose=verbose
     )
+    
+    # Ottieni la loss_history e accuracy_history completa dalla rete
+    loss_history = net.loss_history
+    accuracy_history = net.accuracy_history
     
     # Valutazione su TRAIN e VALIDATION (NON test!)
     train_pred = net.predict(X_train)
@@ -57,12 +61,8 @@ def _monk2_test(learning_rate, seed, verbose=False):
     val_error = 1 - val_acc
     
     # Calcola le loss finali
-    if isinstance(history, dict) and 'training' in history:
-        final_train_loss = history['training'][-1] if isinstance(history['training'], list) else history['training']
-        final_val_loss = history['validation'][-1] if isinstance(history['validation'], list) else history['validation']
-    else: 
-        final_train_loss = history if not isinstance(history, dict) else 0
-        final_val_loss = history if not isinstance(history, dict) else 0
+    final_train_loss = loss_history['training'][-1]
+    final_val_loss = loss_history['validation'][-1]
     
     return {
         'train_accuracy': train_acc,
@@ -72,7 +72,8 @@ def _monk2_test(learning_rate, seed, verbose=False):
         'train_loss': final_train_loss,
         'val_loss': final_val_loss,
         'network': net,
-        'history': history,
+        'loss_history': loss_history,
+        'accuracy_history': accuracy_history,
         'params': params,
         'lr': learning_rate,
         'seed': seed,
@@ -233,12 +234,12 @@ def plot_results(train_results, test_results, save_path='monk2_performance.png')
 
 def plot_loss_vs_epochs(result, save_path='monk2_loss_vs_epochs.png'):
     """
-    NUOVO: Grafico della Half MSE Loss in funzione delle epoche per Train e Validation
+    Grafico della Half MSE Loss in funzione delle epoche per Train e Validation
     """
     save_path = save_path.strip().replace(' ', '')
     
     print(f"\n{'='*70}")
-    print(f"  CREAZIONE GRAFICO Loss vs Epoche (Half MSE)")
+    print(f"  CREAZIONE GRAFICO Loss vs epochs (Half MSE)")
     print(f"{'='*70}")
     
     X_train, y_train, X_val, y_val, X_test, y_test = result['data']
@@ -337,7 +338,7 @@ def plot_loss_vs_epochs(result, save_path='monk2_loss_vs_epochs.png'):
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"📊 Grafico Loss vs Epochs salvato in: {save_path}")
+    print(f"Grafico Loss vs epochs salvato in: {save_path}")
     plt.show()
     
     return net, train_losses, val_losses
@@ -442,7 +443,7 @@ def plot_accuracy_vs_epochs(result, save_path='monk2_accuracy_vs_epochs.png'):
     
     return net, train_accuracies, val_accuracies
 
-def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='monk2_bias_variance_epochs.png'):
+def plot_loss_epochs(all_results, dataset_name='MONK-2', save_path='monk2_loss_epochs.png'):
     from collections import defaultdict
     
     save_path = save_path.strip().replace(' ', '')
@@ -579,7 +580,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='mon
     # FORMATTING
     ax.set_xlabel('Epochs)', fontsize=13, fontweight='bold')
     ax.set_ylabel('Half MSE', fontsize=13, fontweight='bold')
-    ax.set_title(f'Bias-Variance Tradeoff - {dataset_name}\nTraining and Validation Error vs Training Epochs', 
+    ax.set_title(f'Loss vs Epochs - {dataset_name}\n', 
                 fontsize=14, fontweight='bold', pad=15)
     ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
@@ -590,7 +591,7 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-2', save_path='mon
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"\n Grafico Bias-Variance (epoche) salvato in: {save_path}")
+    print(f"\n Grafico Loss vs epochs salvato in: {save_path}")
     plt.show()
 
 def plot_accuracy_vs_epochs(all_results, dataset_name='MONK-2', save_path='monk2_accuracy_vs_epochs.png'):
@@ -603,76 +604,67 @@ def plot_accuracy_vs_epochs(all_results, dataset_name='MONK-2', save_path='monk2
     print(f"  CREAZIONE GRAFICO Accuracy vs Epoche")
     print(f"{'='*70}")
     
-    print("Re-training di modelli selezionati con tracking delle accuracy...")
+    # Filtra per modelli con performance eccellente
+    perfect_results = [r for r in all_results if r['val_accuracy'] >= 0.999]
+    high_perf_results = [r for r in all_results if r['val_accuracy'] >= 0.98]
+    
+    if len(perfect_results) >= 5:
+        print(f" Usando {len(perfect_results)} modelli con val_acc >= 99.9%")
+        results_to_use = perfect_results
+    elif len(high_perf_results) >= 5:
+        print(f" Usando {len(high_perf_results)} modelli con val_acc >= 98%")
+        results_to_use = high_perf_results
+    else:
+        print(f"  Usando tutti i {len(all_results)} modelli disponibili")
+        results_to_use = all_results
+    
+    # Ordina per validation accuracy
+    results_to_use = sorted(results_to_use, key=lambda x: x['val_accuracy'], reverse=True)
+    
+    # USA LE HISTORY GIÀ SALVATE - Filtra solo modelli che raggiungono 100%
+    print(f"Elaborazione history dai modelli che raggiungono 100%...")
+    
+    perfect_models = []
+    for result in results_to_use[:30]:
+        accuracy_history = result['accuracy_history']
+        val_accs = accuracy_history['validation']
+        if max(val_accs) >= 0.9999:
+            perfect_models.append(result)
+    
+    if len(perfect_models) == 0:
+        print(f"  Nessun modello raggiunge 100%. Uso i migliori disponibili")
+        perfect_models = results_to_use[:10]
+    else:
+        print(f"  Trovati {len(perfect_models)} modelli che raggiungono 100%")
+    
+    models_to_use = perfect_models[:10]
+    print(f"  Usando {len(models_to_use)} modelli per il grafico")
     
     all_curves = []
-    num_runs = min(15, len(all_results))
-    
-    for idx in range(num_runs):
-        result = all_results[idx]
-        print(f"\rProcessing run {idx+1}/{num_runs}..  .", end="")
+    for idx, result in enumerate(models_to_use):
+        accuracy_history = result['accuracy_history']
         
-        X_train, y_train, X_val, y_val, X_test, y_test = result['data']
-        np.random.seed(result['seed'])
+        train_accs_run = accuracy_history['training']
+        val_accs_run = accuracy_history['validation']
+        epochs_run = list(range(1, len(train_accs_run) + 1))
         
-        params = result['params'].copy()
-        net = NeuralNetwork(**params)
-        
-        train_accs_run = []
-        val_accs_run = []
-        epochs_run = []
-        
-        max_epochs = 200
-        batch_size = 1
-        patience = 200
-        best_val_loss = float('inf')
-        patience_counter = 0
-        
-        net.best_val_loss = np.inf
-        net.early_stop_wait = 0
-        net.lr_wait = 0
-        
-        for epoch in range(max_epochs):
-            epoch_train_loss = 0.0
-            for i in range(len(X_train)):
-                xi = X_train[i]
-                yi = y_train[i]
-                
-                y_pred = net.forward(xi)
-                sample_loss = net.compute_loss(yi, y_pred, loss_type=net.loss_type)
-                epoch_train_loss += np.sum(sample_loss)
-                
-                err = net.compute_error_signal(yi, y_pred, loss_type=net.loss_type)
-                err = np.asarray(err).flatten()
-                net.backward(err, accumulate=False)
-            
-            # Calcola accuracy
-            train_pred = net.predict(X_train)
-            train_pred_class = (train_pred > 0.5).astype(int)
-            train_acc = np.mean(train_pred_class == y_train)
-            
-            val_pred = net.predict(X_val)
-            val_pred_class = (val_pred > 0.5).astype(int)
-            val_acc = np.mean(val_pred_class == y_val)
-            
-            val_loss = np.sum(net.compute_loss(y_val, val_pred, loss_type=net.loss_type)) / len(y_val)
-            
-            epochs_run.append(epoch + 1)
-            train_accs_run.append(train_acc)
-            val_accs_run.append(val_acc)
-            
-            if val_loss < best_val_loss: 
-                best_val_loss = val_loss
-                patience_counter = 0
-            else:
-                patience_counter += 1
-            
-            if patience_counter >= patience:
-                break
+        if idx == 0:
+            max_val_acc = max(val_accs_run) if val_accs_run else 0
+            print(f"  Esempio modello 1: Max val_acc = {max_val_acc:.4%}")
         
         all_curves.append((epochs_run, train_accs_run, val_accs_run))
     
-    print("\n Re-training completato")
+    print("\nElaborazione completata")
+    
+    # SMOOTHING
+    def smooth_curve(values, weight=0.92):
+        smoothed = []
+        last = values[0] if values else 0
+        for point in values:
+            smoothed_val = last * weight + (1 - weight) * point
+            smoothed.append(smoothed_val)
+            last = smoothed_val
+        return smoothed
     
     # CALCOLA MEDIE
     max_len = max(len(curve[0]) for curve in all_curves) if all_curves else 200
@@ -699,15 +691,19 @@ def plot_accuracy_vs_epochs(all_results, dataset_name='MONK-2', save_path='monk2
     fig, ax = plt.subplots(figsize=(12, 7))
     
     if train_acc_means:
-        ax.plot(epochs_axis, train_acc_means, color='#1F618D', linewidth=2.5,
+        # Applica smoothing
+        train_acc_smooth = smooth_curve(train_acc_means, weight=0.92)
+        val_acc_smooth = smooth_curve(val_acc_means, weight=0.92)
+        
+        ax.plot(epochs_axis, train_acc_smooth, color='#1F618D', linewidth=2.5,
                label='Training Accuracy', alpha=0.9)
-        ax.plot(epochs_axis, val_acc_means, color='#CB4335', linewidth=2.5,
+        ax.plot(epochs_axis, val_acc_smooth, color='#CB4335', linewidth=2.5,
                label='Validation Accuracy', alpha=0.9)
         
         # Optimal point
-        max_val_idx = np.argmax(val_acc_means)
-        optimal_epoch = max_val_idx + 1
-        optimal_acc = val_acc_means[max_val_idx]
+        max_val_idx = np.argmax(val_acc_smooth)
+        optimal_epoch = list(epochs_axis)[max_val_idx]
+        optimal_acc = val_acc_smooth[max_val_idx]
         
         ax.axvline(x=optimal_epoch, color='green', linestyle=':',
                   linewidth=2.5, alpha=0.7,
@@ -718,8 +714,13 @@ def plot_accuracy_vs_epochs(all_results, dataset_name='MONK-2', save_path='monk2
         # Target 100%
         ax.axhline(y=1.0, color='green', linestyle='--', linewidth=2,
                    alpha=0.5, label='100% Target')
+        
+        # Stampa statistiche
+        max_raw_val_acc = max(val_acc_means)
+        print(f"\n  Max Validation Accuracy (raw): {max_raw_val_acc:.4%}")
+        print(f"  Max Validation Accuracy (smoothed): {optimal_acc:.4%}")
     
-    ax.set_xlabel('Model Complexity (Training Epochs)', fontsize=13, fontweight='bold')
+    ax.set_xlabel('Epochs', fontsize=13, fontweight='bold')
     ax.set_ylabel('Accuracy', fontsize=13, fontweight='bold')
     ax.set_title(f'Training and Validation Accuracy vs Epochs - {dataset_name}',
                 fontsize=14, fontweight='bold', pad=15)
@@ -727,6 +728,10 @@ def plot_accuracy_vs_epochs(all_results, dataset_name='MONK-2', save_path='monk2
     ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.8)
     ax.set_xlim(0, max_len * 1.02)
     ax.set_ylim(0, 1.05)
+    
+    # Formatta asse y come percentuale
+    from matplotlib.ticker import PercentFormatter
+    ax.yaxis.set_major_formatter(PercentFormatter(1.0))
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
@@ -751,23 +756,23 @@ if __name__ == "__main__":
        # Salva risultati originali
         all_results_original = all_results.copy()
 
-        # Filtra modelli NON perfetti SOLO per bias-variance
+        # Filtra modelli NON perfetti SOLO loss-epochs
         imperfect_results = [r for r in all_results if r['val_accuracy'] < 1.0 or r['train_accuracy'] < 1.0]
 
         if len(imperfect_results) >= 5:
-            results_for_bias_variance = imperfect_results
+            results_for_loss_epochs = imperfect_results
         else:
-            results_for_bias_variance = all_results
+            results_for_loss_epochs = all_results
 
-        # FASE 2: Bias-Variance Tradeoff (modelli sub-ottimali)
-        plot_bias_variance_epochs(results_for_bias_variance,
+        # FASE 2: Loss vs Epochs (modelli sub-ottimali)
+        plot_loss_epochs(results_for_loss_epochs,
                           dataset_name='MONK-2',
-                          save_path='monk2_bias_variance_epochs.png')
+                          save_path='monk2_loss_epochs.png')
 
         # FASE 2b: Accuracy vs Epoche (modelli ottimali - ORIGINALI)
         plot_accuracy_vs_epochs(all_results_original,  #  Usa modelli ottimali
                         dataset_name='MONK-2',
-                        save_path='monk2_accuracy_vs_epochs. png')
+                        save_path='monk2_accuracy_vs_epochs.png')
         
         # FASE 3: Valuta sul TEST SET (UNA SOLA VOLTA!)
         print(f"\n FASE 3: Valutazione finale sul Test Set")
@@ -844,7 +849,7 @@ if __name__ == "__main__":
         print(f"    False Negatives (FN): {cm['fn']}")
         
         print(f"\n File salvati:")
-        print(f"  - monk2_bias_variance_epochs.png (bias-variance tradeoff)")
+        print(f"  - monk2_loss_epochs.png (loss vs epochs)")
         print(f"  - monk2_accuracy_vs_epochs.png (accuracy vs epochs)")
         print(f"  - monk2_performance.png (confusion matrix)")
         

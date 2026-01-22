@@ -65,7 +65,6 @@ train_mee = data.MEE(true_train_denorm, pred_train_denorm)
 print(f"MEE finale (train set): {train_mee:.6f}")
 
 cup_TS = data.return_CUP_TS()
-print(cup_TS)
 
 cup_TS = data.normalize(cup_TS, target_min, target_max, train_min, train_max)
 

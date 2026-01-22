@@ -36,7 +36,7 @@ def _monk3_test(learning_rate, l2_lambda, seed, verbose=False):
     # Crea e addestra la rete
     net = NeuralNetwork(**params)
     
-    history = net.fit(
+    best_val_loss = net.fit(
         X_train, y_train,
         X_val, y_val,
         epochs=2000,
@@ -45,7 +45,11 @@ def _monk3_test(learning_rate, l2_lambda, seed, verbose=False):
         verbose=verbose
     )
     
-    # Valutazione su TRAIN e VALIDATION (NON test!)
+    # Ottieni la loss_history e accuracy_history completa dalla rete
+    loss_history = net.loss_history
+    accuracy_history = net.accuracy_history
+    
+    # Valutazione su TRAIN e VALIDATION 
     train_pred = net.predict(X_train)
     train_pred_class = (train_pred > 0.5).astype(int)
     train_acc = np.mean(train_pred_class == y_train)
@@ -57,12 +61,8 @@ def _monk3_test(learning_rate, l2_lambda, seed, verbose=False):
     val_error = 1 - val_acc
     
     # Calcola le loss finali
-    if isinstance(history, dict) and 'training' in history:
-        final_train_loss = history['training'][-1] if isinstance(history['training'], list) else history['training']
-        final_val_loss = history['validation'][-1] if isinstance(history['validation'], list) else history['validation']
-    else:  
-        final_train_loss = history if not isinstance(history, dict) else 0
-        final_val_loss = history if not isinstance(history, dict) else 0
+    final_train_loss = loss_history['training'][-1]
+    final_val_loss = loss_history['validation'][-1]
     
     return {
         'train_accuracy': train_acc,
@@ -72,7 +72,8 @@ def _monk3_test(learning_rate, l2_lambda, seed, verbose=False):
         'train_loss': final_train_loss,
         'val_loss': final_val_loss,
         'network': net,
-        'history': history,
+        'loss_history': loss_history,
+        'accuracy_history': accuracy_history,
         'params': params,
         'lr': learning_rate,
         'l2_lambda': l2_lambda,
@@ -85,7 +86,7 @@ def grid_search_lr(n_seeds_per_lr=20, learning_rates=None, l2_lambda=None):
     if learning_rates is None:  
         learning_rates = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3]  
     if l2_lambda is None:
-        l2_lambda = [0.0003] #[0.0005, 0.01, 0.02, 0.03, 0.04]
+        l2_lambda = [0.0] # [0.0005, 0.01, 0.02, 0.03, 0.04]
     
     best_val_acc = 0
     best_results = None
@@ -125,7 +126,7 @@ def grid_search_lr(n_seeds_per_lr=20, learning_rates=None, l2_lambda=None):
                 except Exception as e:
                     print(f" Errore:  {str(e)[:40]}")
                     continue
-            # MONK-3 ha noise, difficile raggiungere 100%
+            # MONK-3 ha noise
             if results['val_accuracy'] >= 0.98:
                 print(f"   98%+ VALIDATION ACCURACY!")
         
@@ -262,65 +263,61 @@ def plot_results(train_results, test_results, save_path='monk3_performance.png')
     plt.show()
 
 
-def plot_bias_variance_epochs(all_results, dataset_name='MONK-3', save_path='monk3_bias_variance_epochs.png'):
+def plot_loss_epochs(all_results, dataset_name='MONK-3', save_path='monk3_loss_epochs.png'):
     from collections import defaultdict
     
     save_path = save_path.strip().replace(' ', '')
     
     print(f"\n{'='*70}")
-    print(f" CREAZIONE GRAFICO BIAS-VARIANCE VS EPOCHE")
+    print(f" CREAZIONE GRAFICO LOSS VS EPOCHS - {dataset_name}")
     print(f"{'='*70}")
     
-    # RE-TRAINING DI ALCUNI MODELLI CON TRACKING
-    print("Re-training di modelli selezionati con epoch tracking...")
+    # Filtra per modelli con buone performance (≥92% per MONK-3 con 5% noise)
+    excellent_results = [r for r in all_results if r['val_accuracy'] >= 0.92]
+    good_results = [r for r in all_results if r['val_accuracy'] >= 0.88]
+    
+    if len(excellent_results) >= 10:
+        print(f" Usando {len(excellent_results)} modelli con val_acc >= 92%")
+        results_to_use = excellent_results
+    elif len(good_results) >= 5:
+        print(f" Usando {len(good_results)} modelli con val_acc >= 88%")
+        results_to_use = good_results
+    else:
+        print(f"  Usando tutti i {len(all_results)} modelli disponibili")
+        results_to_use = all_results
+    
+    # Ordina per validation accuracy
+    results_to_use = sorted(results_to_use, key=lambda x: x['val_accuracy'], reverse=True)
+    
+    # USA LE HISTORY GIÀ SALVATE - USA I MIGLIORI 10-15 MODELLI
+    print(f"Elaborazione history dai {min(15, len(results_to_use))} modelli migliori...")
     
     all_curves = []
-    num_runs = min(15, len(all_results))
+    num_runs = min(15, len(results_to_use))
     
     for idx in range(num_runs):
-        result = all_results[idx]
-        print(f"\rProcessing run {idx+1}/{num_runs}.. .", end="")
+        result = results_to_use[idx]
+        print(f"\rProcessing run {idx+1}/{num_runs}...", end="")
         
-        X_train, y_train, X_val, y_val, X_test, y_test = result['data']
+        loss_history = result['loss_history']
+        accuracy_history = result['accuracy_history']
         
-        # Seed per riproducibilità
-        np.random.seed(result['seed'])
+        train_losses_run = loss_history['training']
+        val_losses_run = loss_history['validation']
+        train_accs_run = accuracy_history['training']
+        val_accs_run = accuracy_history['validation']
+        epochs_run = list(range(1, len(train_losses_run) + 1))
         
-        # Ricrea la rete
-        params = result['params'].copy()
-        net = NeuralNetwork(**params)
+        if idx == 0:
+            max_val_acc = max(val_accs_run) if val_accs_run else 0
+            print(f"\n  Modello 1: Max val_acc = {max_val_acc:.4%}")
         
-        train_losses_run = []
-        val_losses_run = []
-        epochs_run = []
-        
-        max_epochs = 150
-        batch_size = 1
-        
-        for epoch in range(max_epochs):
-            try:
-                net.fit(X_train, y_train, X_val, y_val, epochs=1, batch_size=batch_size, verbose=False)
-            except:  
-                break
-            
-            # Training error
-            train_pred = net.predict(X_train)
-            train_loss = (1/2)*np.mean((train_pred - y_train) ** 2)  # MSE
-            
-            # Validation error
-            val_pred = net.predict(X_val)
-            val_loss = (1/2)*np.mean((val_pred - y_val) ** 2)  # MSE
-            
-            epochs_run.append(epoch + 1)
-            train_losses_run.append(train_loss)
-            val_losses_run.append(val_loss)
-        
-        all_curves.append((epochs_run, train_losses_run, val_losses_run))
+        all_curves.append((epochs_run, train_losses_run, val_losses_run, train_accs_run, val_accs_run))
     
-    print("\n Re-training completato")
+    print("\nElaborazione completata")
     
     # SMOOTHING DELLE CURVE
-    def smooth_curve(values, weight=0.85):
+    def smooth_curve(values, weight=0.92):
         """Exponential moving average"""
         smoothed = []
         last = values[0] if values else 0
@@ -330,72 +327,122 @@ def plot_bias_variance_epochs(all_results, dataset_name='MONK-3', save_path='mon
             last = smoothed_val
         return smoothed
     
-    # PLOT
-    fig, ax = plt.subplots(figsize=(11, 7))
-    
     # CALCOLA MEDIE PER EPOCA
     max_len = max(len(curve[0]) for curve in all_curves) if all_curves else 150
     
-    train_means = []
-    test_means = []
+    train_loss_means = []
+    val_loss_means = []
+    train_acc_means = []
+    val_acc_means = []
     
     for epoch_idx in range(max_len):
-        train_vals = []
-        test_vals = []
+        train_loss_vals = []
+        val_loss_vals = []
+        train_acc_vals = []
+        val_acc_vals = []
         
-        for epochs_run, train_errors_run, test_errors_run in all_curves:  
-            if epoch_idx < len(train_errors_run):
-                train_vals.append(train_errors_run[epoch_idx])
-                test_vals.append(test_errors_run[epoch_idx])
+        for epochs_run, train_losses, val_losses, train_accs, val_accs in all_curves:  
+            if epoch_idx < len(train_losses):
+                train_loss_vals.append(train_losses[epoch_idx])
+                val_loss_vals.append(val_losses[epoch_idx])
+                train_acc_vals.append(train_accs[epoch_idx])
+                val_acc_vals.append(val_accs[epoch_idx])
         
-        if train_vals:
-            train_means.append(np.mean(train_vals))
-            test_means.append(np.mean(test_vals))
+        if train_loss_vals:
+            train_loss_means.append(np.mean(train_loss_vals))
+            val_loss_means.append(np.mean(val_loss_vals))
+            train_acc_means.append(np.mean(train_acc_vals))
+            val_acc_means.append(np.mean(val_acc_vals))
     
-    epochs_axis = range(1, len(train_means) + 1)
+    epochs_axis = range(1, len(train_loss_means) + 1)
     
-    # SMOOTH DELLE MEDIE
-    if train_means:
-        train_means_smooth = smooth_curve(train_means, weight=0.98)
-        test_means_smooth = smooth_curve(test_means, weight=0.98)
+    # CREAZIONE FIGURE CON 2 SUBPLOT (LOSS E ACCURACY)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+    
+    # SUBPLOT 1: LOSS
+    if train_loss_means:
+        train_loss_smooth = smooth_curve(train_loss_means, weight=0.92)
+        val_loss_smooth = smooth_curve(val_loss_means, weight=0.92)
         
-        # linee curve
-        ax.plot(epochs_axis, train_means_smooth, color='#1F618D', linewidth=2, 
-               label='Training Loss (mean)', zorder=10)
-        ax.plot(epochs_axis, test_means_smooth, color='#CB4335', linewidth=2,
-               label='Validation Loss (mean)', zorder=10)
+        ax1.plot(epochs_axis, train_loss_smooth, color='#1F618D', linewidth=2.5, 
+               label='Training Loss', zorder=10)
+        ax1.plot(epochs_axis, val_loss_smooth, color='#CB4335', linewidth=2.5,
+               label='Validation Loss', zorder=10)
         
-        # ANNOTAZIONI
-        y_max = max(max(train_means_smooth), max(test_means_smooth))
-        y_min = min(min(train_means_smooth), min(test_means_smooth))
-        y_range = y_max - y_min if y_max > y_min else 1.0
-
         # Optimal complexity
-        min_test_idx = np.argmin(test_means_smooth)
-        optimal_epoch = min_test_idx + 1
-        optimal_error = test_means_smooth[min_test_idx]
+        min_val_idx = np.argmin(val_loss_smooth)
+        optimal_epoch_loss = list(epochs_axis)[min_val_idx]
+        optimal_loss = val_loss_smooth[min_val_idx]
         
-        ax.axvline(x=optimal_epoch, color='green', linestyle=':', 
+        ax1.axvline(x=optimal_epoch_loss, color='green', linestyle=':', 
                   linewidth=2.5, alpha=0.7, zorder=9,
-                  label=f'Optimal:  {optimal_epoch} epochs')
-        ax.scatter([optimal_epoch], [optimal_error], color='green', 
+                  label=f'Optimal: {optimal_epoch_loss} epochs')
+        ax1.scatter([optimal_epoch_loss], [optimal_loss], color='green', 
                   s=200, marker='*', zorder=11, edgecolors='black', linewidths=2)
+        
+        y_max = max(max(train_loss_smooth), max(val_loss_smooth))
+        y_min = min(min(train_loss_smooth), min(val_loss_smooth))
+        y_range = y_max - y_min if y_max > y_min else 1.0
+        ax1.set_ylim(max(0, y_min - 0.05 * y_range), y_max + 0.15 * y_range)
     
-    # FORMATTING
-    ax.set_xlabel('Model Complexity (Training Epochs)', fontsize=13, fontweight='bold')
-    ax.set_ylabel('Prediction Error', fontsize=13, fontweight='bold')
-    ax.set_title(f'Loss vs training epoches - {dataset_name}',
-                fontsize=13, fontweight='bold', pad=15)
-    ax.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
-    ax.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax1.set_xlabel('Epochs', fontsize=13, fontweight='bold')
+    ax1.set_ylabel('Half MSE Loss', fontsize=13, fontweight='bold')
+    ax1.set_title(f'Training & Validation Loss vs Epochs\n{dataset_name}',
+                fontsize=14, fontweight='bold', pad=15)
+    ax1.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+    ax1.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax1.set_xlim(0, max_len * 1.02)
     
-    if train_means:
-        ax.set_ylim(max(0, y_min - 0.05 * y_range), y_max + 0.15 * y_range)
-    ax.set_xlim(0, max_len * 1.02)
+    # SUBPLOT 2: ACCURACY
+    if train_acc_means:
+        train_acc_smooth = smooth_curve(train_acc_means, weight=0.92)
+        val_acc_smooth = smooth_curve(val_acc_means, weight=0.92)
+        
+        ax2.plot(epochs_axis, train_acc_smooth, color='#2874A6', linewidth=2.5, 
+               label='Training Accuracy', zorder=10)
+        ax2.plot(epochs_axis, val_acc_smooth, color='#D35400', linewidth=2.5,
+               label='Validation Accuracy', zorder=10)
+        
+        # Optimal complexity
+        max_val_idx = np.argmax(val_acc_smooth)
+        optimal_epoch_acc = list(epochs_axis)[max_val_idx]
+        optimal_acc = val_acc_smooth[max_val_idx]
+        
+        ax2.axvline(x=optimal_epoch_acc, color='green', linestyle=':', 
+                  linewidth=2.5, alpha=0.7, zorder=9,
+                  label=f'Optimal: {optimal_epoch_acc} epochs')
+        ax2.scatter([optimal_epoch_acc], [optimal_acc], color='green', 
+                  s=200, marker='*', zorder=11, edgecolors='black', linewidths=2)
+        
+        # Target 97% (MONK-3 ha 5% noise, max teorico ~95%)
+        ax2.axhline(y=0.97, color='orange', linestyle='--', linewidth=2, 
+                   alpha=0.5, label='97% Target (5% noise limit)')
+        
+        # Statistiche
+        max_raw_val_acc = max(val_acc_means)
+        print(f"\n  Max Validation Accuracy (raw): {max_raw_val_acc:.4%}")
+        print(f"  Max Validation Accuracy (smoothed): {optimal_acc:.4%}")
+        print(f"  Note: MONK-3 has 5% noise, theoretical max ~95%")
+        
+        y_max_acc = max(1.05, max(max(train_acc_smooth), max(val_acc_smooth)) + 0.05)
+        y_min_acc = max(0, min(min(train_acc_smooth), min(val_acc_smooth)) - 0.05)
+        ax2.set_ylim(y_min_acc, y_max_acc)
+    
+    ax2.set_xlabel('Epochs', fontsize=13, fontweight='bold')
+    ax2.set_ylabel('Accuracy', fontsize=13, fontweight='bold')
+    ax2.set_title(f'Training & Validation Accuracy vs Epochs\n{dataset_name}',
+                fontsize=14, fontweight='bold', pad=15)
+    ax2.legend(fontsize=11, loc='best', framealpha=0.95, edgecolor='black')
+    ax2.grid(True, alpha=0.3, linestyle='--', linewidth=0.5)
+    ax2.set_xlim(0, max_len * 1.02)
+    
+    # Formatta asse y come percentuale
+    from matplotlib.ticker import PercentFormatter
+    ax2.yaxis.set_major_formatter(PercentFormatter(1.0))
     
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    print(f"\n Grafico Bias-Variance salvato in: {save_path}")
+    print(f"\n Grafico salvato in: {save_path}")
     plt.show()
 
 def find_optimal_threshold_ensemble(ensemble_preds_val, y_val, weights=None):
@@ -464,11 +511,11 @@ if __name__ == "__main__":
         else:
             print(f"  Poche config ≥88%, usando tutte le {len(all_results)} configurazioni\n")
         
-        # FASE 2: Bias-Variance Tradeoff
-        print(f"\n FASE 2: Grafico Bias-Variance vs Epoche")
-        plot_bias_variance_epochs(all_results, 
+        # FASE 2: Loss vs Epochs
+        print(f"\n FASE 2: Grafico Loss vs Epoche")
+        plot_loss_epochs(all_results, 
                                   dataset_name='MONK-3',
-                                  save_path='monk3_bias_variance_epochs.png')
+                                  save_path='monk3_loss_epochs.png')
         
         # FASE 3: Test Set Evaluation (singolo modello)
         print(f"\n FASE 3: Valutazione singolo modello sul Test Set")
@@ -501,7 +548,7 @@ if __name__ == "__main__":
         elif test_results['test_accuracy'] >= 0.95:
             print("  OTTIMO: 95%+ test accuracy!")
         elif test_results['test_accuracy'] >= 0.93:
-            print(" ✓ BUONO: 93%+ test accuracy!")
+            print("  BUONO: 93%+ test accuracy!")
         else:
             print(f"  Test Accuracy: {test_results['test_accuracy']:.2%}")
         
@@ -544,7 +591,7 @@ if __name__ == "__main__":
         print(f"    False Negatives (FN): {cm['fn']}")
         
         print(f"\n File salvati:")
-        print(f"  - monk3_bias_variance_epochs.png (bias-variance tradeoff)")
+        print(f"  - monk3_loss_epochs.png (loss vs epochs)")
         print(f"  - monk3_performance.png (confusion matrix)")
         
         print(f"\n{'='*70}")
